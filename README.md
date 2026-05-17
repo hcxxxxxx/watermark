@@ -104,18 +104,34 @@ Then run:
 
 ```bash
 python scripts/run_melshield_ljspeech.py \
-  --config configs/melshield_ljspeech.yaml \
+  --config configs/melshield_hifigan_official.yaml \
   --vocoder hifigan \
   --vocoder-config checkpoints/hifigan/config.json \
   --vocoder-checkpoint checkpoints/hifigan/generator_v1 \
-  --alpha 0.25 \
   --payload-bits 32 \
   --limit 100 \
   --save-audio
 ```
 
-The paper uses `alpha = 0.25` for HiFi-GAN, `L = 32` for robustness tables,
-and the band `[20, 56)`.
+For common official LJSpeech HiFi-GAN checkpoints, make sure the Mel frontend
+matches `checkpoints/hifigan/config.json`; these checkpoints usually use
+`f_min = 0` and `f_max = 8000`. The paper reports `alpha = 0.25` for HiFi-GAN
+in its normalized Mel setting, but official checkpoints consume raw log-Mel, so
+start lower and sweep:
+
+```bash
+for a in 0.005 0.01 0.02 0.05 0.1; do
+  python scripts/run_melshield_ljspeech.py \
+    --config configs/melshield_hifigan_official.yaml \
+    --alpha "$a" \
+    --attacks none \
+    --limit 100 \
+    --output-dir "runs/hifigan_alpha_${a}"
+done
+```
+
+Pick the smallest `alpha` whose no-attack `mean_bit_acc` is high while
+`pesq_bm`/`stoi_bm` remain healthy, then run the full attack suite.
 
 ## DiffWave / Other Vocoders
 

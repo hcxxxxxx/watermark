@@ -1,0 +1,40 @@
+paths:
+  data_root: data/LJSpeech-1.1
+  output_dir: runs/melshield_hifigan_official
+
+# This config is for common official LJSpeech HiFi-GAN checkpoints.
+# Match these values to checkpoints/hifigan/config.json before large runs.
+mel:
+  sample_rate: 22050
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  f_min: 0.0
+  f_max: 8000.0
+  power: 1.0
+  eps: 1.0e-5
+
+watermark:
+  payload_bits: 32
+  key: change-this-secret-key
+  # Official HiFi-GAN checkpoints consume raw log-Mel, so start much lower
+  # than the paper's normalized-domain alpha=0.25 and sweep upward.
+  alpha: 0.02
+  band: [20, 56]
+  threshold: 0.61
+  headroom: 0.0
+  mask_floor: 0.05
+  energy_gamma: 0.75
+  boundary_margin: 0.02
+  align_max_shift: 12
+
+vocoder:
+  name: hifigan
+  checkpoint: checkpoints/hifigan/generator_v1
+  config: checkpoints/hifigan/config.json
+  command:
+
+evaluation:
+  limit:
+  attacks: [none, mp3, aac, scale, rs16, bandpass, lowpass, noise20, noise10, noise5, echo]
