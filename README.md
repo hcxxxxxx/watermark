@@ -1,0 +1,159 @@
+# MelShield Reproduction
+
+This repository is a from-paper reproduction of **MelShield: Robust Mel-Domain
+Audio Watermarking for Provenance Attribution of AI Generated Synthesized
+Speech** (`2605.01515v1.pdf`).
+
+The paper does not train a new neural network. MelShield is a keyed,
+reference-based spread-spectrum watermark in normalized log-Mel space:
+
+1. Compute an 80-bin normalized log-Mel spectrogram `X in [0, 1]`.
+2. Restrict embedding to the mid-frequency band `F = {20, ..., 55}`.
+3. Generate one deterministic `{-1, +1}` spreading pattern per payload bit
+   from `(secret key, utterance id, bit index)`.
+4. Superpose all bit layers with the paper's `1/sqrt(L)` energy normalization.
+5. Add `alpha * adaptive_mask * watermark_layer` to the selected Mel band.
+6. Store the clean reference Mel and metadata for owner-side verification.
+7. Decode from a suspect waveform by recomputing Mel, subtracting the reference,
+   and taking the sign of each keyed masked-correlation score.
+
+The adaptive mask is implemented from the paper description: it favors
+higher-energy frames and downweights bins close to the `[0, 1]` clipping
+boundaries. The exact mask formula is not specified in the PDF, so this part is
+a documented faithful approximation rather than a verbatim official release.
+
+## Dataset Path
+
+Download/extract LJSpeech relative to the repository root:
+
+```text
+watermark/
+  data/
+    LJSpeech-1.1/
+      metadata.csv
+      wavs/
+        LJ001-0001.wav
+        ...
+```
+
+So the default dataset path is:
+
+```text
+data/LJSpeech-1.1
+```
+
+You can check the layout with:
+
+```bash
+python scripts/prepare_ljspeech.py --root data/LJSpeech-1.1
+```
+
+## Environment
+
+Your remote server has CUDA 12.8, so the requirements file points pip at the
+official PyTorch `cu128` wheel index.
+
+```bash
+conda create -n melshield python=3.10 -y
+conda activate melshield
+pip install -r requirements.txt
+conda install -c conda-forge ffmpeg -y
+```
+
+Or:
+
+```bash
+conda env create -f environment.yml
+conda activate melshield
+```
+
+`ffmpeg` is needed only for the MP3-128 and AAC-96 robustness attacks.
+
+## Quick Smoke Test
+
+This runs the watermark pipeline directly in Mel space, without a neural
+vocoder. It is useful after pushing to the server to confirm that the repo and
+dataset paths are correct.
+
+```bash
+python scripts/run_melshield_ljspeech.py \
+  --config configs/melshield_ljspeech.yaml \
+  --vocoder mel \
+  --limit 10
+```
+
+Expected output files:
+
+```text
+runs/melshield_ljspeech/
+  refs/*.npz
+  results.csv
+  summary.json
+```
+
+## HiFi-GAN Reproduction
+
+Place an LJSpeech-compatible 22.05 kHz HiFi-GAN checkpoint here:
+
+```text
+checkpoints/hifigan/config.json
+checkpoints/hifigan/generator_v1
+```
+
+Then run:
+
+```bash
+python scripts/run_melshield_ljspeech.py \
+  --config configs/melshield_ljspeech.yaml \
+  --vocoder hifigan \
+  --vocoder-config checkpoints/hifigan/config.json \
+  --vocoder-checkpoint checkpoints/hifigan/generator_v1 \
+  --alpha 0.25 \
+  --payload-bits 32 \
+  --limit 100 \
+  --save-audio
+```
+
+The paper uses `alpha = 0.25` for HiFi-GAN, `L = 32` for robustness tables,
+and the band `[20, 56)`.
+
+## DiffWave / Other Vocoders
+
+The watermark itself is vocoder-agnostic. For DiffWave, use the command adapter
+with the official DiffWave inference script from your server checkout. The
+external command must accept a raw log-Mel `.npy` and write a `.wav`:
+
+```bash
+python scripts/run_melshield_ljspeech.py \
+  --config configs/melshield_ljspeech.yaml \
+  --vocoder command \
+  --vocoder-command "python external/diffwave/inference.py --spectrogram_path {mel_npy} --output {audio_wav}" \
+  --alpha 0.025 \
+  --payload-bits 32 \
+  --limit 100
+```
+
+The paper uses `alpha = 0.025` for DiffWave.
+
+## One-file Verification
+
+After an experiment, verify one suspect waveform against its saved reference:
+
+```bash
+python scripts/verify_reference.py \
+  --reference runs/melshield_ljspeech/refs/LJ001-0001.npz \
+  --audio runs/melshield_ljspeech/audio/LJ001-0001_wm.wav \
+  --key change-this-secret-key
+```
+
+Verification accepts a claimed identity when `BitAcc >= 0.61`, matching the
+threshold region described in the paper.
+
+## Important Files
+
+- `melshield/watermark.py`: embedding, reference saving, extraction, bit accuracy
+- `melshield/mel.py`: log-Mel frontend, normalization, frame alignment
+- `melshield/attacks.py`: MP3, AAC, scaling, resampling, filters, noise, echo
+- `melshield/vocoders/hifigan.py`: native HiFi-GAN generator loader
+- `scripts/run_melshield_ljspeech.py`: end-to-end LJSpeech experiment runner
+- `configs/melshield_ljspeech.yaml`: paper-style default configuration
