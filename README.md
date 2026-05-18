@@ -168,8 +168,61 @@ threshold region described in the paper.
 ## Important Files
 
 - `melshield/watermark.py`: embedding, reference saving, extraction, bit accuracy
+- `melshield/coding.py`: soft-decision repetition code used by the research prototype
 - `melshield/mel.py`: log-Mel frontend, normalization, frame alignment
 - `melshield/attacks.py`: MP3, AAC, scaling, resampling, filters, noise, echo
 - `melshield/vocoders/hifigan.py`: native HiFi-GAN generator loader
 - `scripts/run_melshield_ljspeech.py`: end-to-end LJSpeech experiment runner
+- `scripts/run_research_melshield_ljspeech.py`: adaptive-mask + soft-ECC research runner
 - `configs/melshield_ljspeech.yaml`: paper-style default configuration
+- `configs/research_melshield_hifigan.yaml`: research prototype configuration
+
+## Research Prototype
+
+The research runner adds three experimental extensions:
+
+- reliability-aware masking with deterministic frequency/texture weights;
+- soft-decision repetition coding, e.g. a 32-bit payload becomes a 96-bit codeword
+  when `repeat=3`;
+- attack-aware grid search over `alpha`, repetition factor, and mask parameters.
+
+Run a small attack-aware search:
+
+```bash
+python scripts/run_research_melshield_ljspeech.py \
+  --config configs/research_melshield_hifigan.yaml \
+  --optimize \
+  --search-limit 20 \
+  --train-attacks none mp3 aac noise20 echo \
+  --alpha-grid 0.025 0.03 0.035 0.04 0.045 0.05 \
+  --repeat-grid 1 3 \
+  --freq-gamma-grid 0.0 0.5 \
+  --texture-gamma-grid 0.0 0.25 \
+  --smooth-grid 1 5 \
+  --output-dir runs/research_search
+```
+
+Then inspect:
+
+```text
+runs/research_search/search_results.csv
+runs/research_search/best_search_candidate.json
+```
+
+Run the best candidate, for example:
+
+```bash
+python scripts/run_research_melshield_ljspeech.py \
+  --config configs/research_melshield_hifigan.yaml \
+  --alpha 0.04 \
+  --repeat 3 \
+  --freq-gamma 0.5 \
+  --texture-gamma 0.25 \
+  --smooth-frames 5 \
+  --limit 100 \
+  --output-dir runs/research_alpha_0.04_repeat3
+```
+
+The research CSV reports both `payload_bit_acc` and `code_bit_acc`.
+`payload_bit_acc` is the main attribution metric after soft-ECC decoding;
+`code_bit_acc` is the raw embedded-codeword accuracy before error correction.

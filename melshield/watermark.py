@@ -23,6 +23,10 @@ class MelShieldConfig:
     energy_gamma: float = 0.75
     boundary_margin: float = 0.02
     align_max_shift: int = 12
+    mask_mode: str = "energy"
+    freq_gamma: float = 0.0
+    texture_gamma: float = 0.0
+    smooth_frames: int = 1
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -108,11 +112,15 @@ class MelShield:
         if self.config.headroom > 0:
             x_band = np.clip(x_band, self.config.headroom, 1.0 - self.config.headroom)
 
-        mask = adaptive_mask(
+        mask = embedding_mask(
             x_band,
             floor=self.config.mask_floor,
             gamma=self.config.energy_gamma,
             boundary_margin=self.config.boundary_margin,
+            mode=self.config.mask_mode,
+            freq_gamma=self.config.freq_gamma,
+            texture_gamma=self.config.texture_gamma,
+            smooth_frames=self.config.smooth_frames,
         )
         layer = self._watermark_layer(message_arr, x_band.shape, utterance_id)
         x_wm[c_min:c_max, :] = np.clip(
@@ -148,11 +156,15 @@ class MelShield:
         delta = delta - float(delta.mean())
         delta_band = delta[c_min:c_max, :]
         x_band = clean_mel[c_min:c_max, :]
-        mask = adaptive_mask(
+        mask = embedding_mask(
             x_band,
             floor=reference.wm_config.mask_floor,
             gamma=reference.wm_config.energy_gamma,
             boundary_margin=reference.wm_config.boundary_margin,
+            mode=reference.wm_config.mask_mode,
+            freq_gamma=reference.wm_config.freq_gamma,
+            texture_gamma=reference.wm_config.texture_gamma,
+            smooth_frames=reference.wm_config.smooth_frames,
         )
 
         used_key = self.config.key if key is None else key
@@ -244,6 +256,74 @@ def adaptive_mask(
         boundary = np.clip(headroom / boundary_margin, 0.0, 1.0)
         mask *= boundary.astype(np.float32)
     return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def embedding_mask(
+    x_band: np.ndarray,
+    floor: float = 0.05,
+    gamma: float = 0.75,
+    boundary_margin: float = 0.02,
+    mode: str = "energy",
+    freq_gamma: float = 0.0,
+    texture_gamma: float = 0.0,
+    smooth_frames: int = 1,
+) -> np.ndarray:
+    """Build the embedding reliability mask.
+
+    ``mode="energy"`` reproduces the original paper-style adaptive mask.
+    ``mode="reliability"`` adds frequency and local-texture reliability terms.
+    The added terms are deterministic functions of the reference Mel, so the
+    verifier can reconstruct the same mask without storing a dense map.
+    """
+
+    mask = adaptive_mask(
+        x_band,
+        floor=floor,
+        gamma=gamma,
+        boundary_margin=boundary_margin,
+    )
+    if mode == "energy":
+        return mask
+    if mode != "reliability":
+        raise ValueError(f"Unknown mask_mode={mode!r}. Use 'energy' or 'reliability'.")
+
+    x_band = np.asarray(x_band, dtype=np.float32)
+    if freq_gamma > 0:
+        freq_energy = x_band.mean(axis=1)
+        freq_weights = _percentile_weights(freq_energy, floor=floor) ** freq_gamma
+        mask *= freq_weights.reshape(-1, 1).astype(np.float32)
+
+    if texture_gamma > 0:
+        frame_mean = x_band.mean(axis=0, keepdims=True)
+        texture = np.abs(x_band - frame_mean)
+        lo, hi = np.percentile(texture, [10.0, 90.0])
+        texture_weights = (texture - lo) / max(float(hi - lo), 1e-8)
+        texture_weights = np.clip(texture_weights, 0.0, 1.0)
+        texture_weights = floor + (1.0 - floor) * texture_weights
+        mask *= texture_weights.astype(np.float32) ** texture_gamma
+
+    if smooth_frames > 1:
+        mask = _smooth_time(mask, smooth_frames)
+    return np.clip(mask, 0.0, 1.0).astype(np.float32)
+
+
+def _percentile_weights(values: np.ndarray, floor: float) -> np.ndarray:
+    lo, hi = np.percentile(values, [10.0, 90.0])
+    weights = (values - lo) / max(float(hi - lo), 1e-8)
+    weights = np.clip(weights, 0.0, 1.0)
+    return (floor + (1.0 - floor) * weights).astype(np.float32)
+
+
+def _smooth_time(mask: np.ndarray, frames: int) -> np.ndarray:
+    frames = max(1, int(frames))
+    if frames <= 1 or mask.shape[1] <= 1:
+        return mask.astype(np.float32)
+    kernel = np.ones(frames, dtype=np.float32) / float(frames)
+    padded = np.pad(mask, ((0, 0), (frames // 2, frames - 1 - frames // 2)), mode="edge")
+    smoothed = np.empty_like(mask, dtype=np.float32)
+    for idx in range(mask.shape[0]):
+        smoothed[idx] = np.convolve(padded[idx], kernel, mode="valid")
+    return smoothed
 
 
 def deterministic_bits(key: str, identifier: str, length: int) -> np.ndarray:
