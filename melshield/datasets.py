@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
@@ -16,7 +17,12 @@ class AudioItem:
     text: str = ""
 
 
-def iter_ljspeech(root: str | Path, limit: Optional[int] = None) -> Iterator[AudioItem]:
+def iter_ljspeech(
+    root: str | Path,
+    limit: Optional[int] = None,
+    sample_mode: str = "first",
+    seed: int = 0,
+) -> Iterator[AudioItem]:
     root = Path(root)
     metadata = root / "metadata.csv"
     wav_dir = root / "wavs"
@@ -27,7 +33,7 @@ def iter_ljspeech(root: str | Path, limit: Optional[int] = None) -> Iterator[Aud
     if not wav_dir.exists():
         raise FileNotFoundError(f"Missing wav directory: {wav_dir}")
 
-    count = 0
+    items: list[AudioItem] = []
     with metadata.open("r", encoding="utf-8") as handle:
         reader = csv.reader(handle, delimiter="|")
         for row in reader:
@@ -38,10 +44,19 @@ def iter_ljspeech(root: str | Path, limit: Optional[int] = None) -> Iterator[Aud
             if not wav_path.exists():
                 continue
             text = row[1] if len(row) > 1 else ""
-            yield AudioItem(utterance_id=utterance_id, wav_path=wav_path, text=text)
-            count += 1
-            if limit is not None and count >= limit:
-                break
+            items.append(AudioItem(utterance_id=utterance_id, wav_path=wav_path, text=text))
+
+    if sample_mode == "first":
+        selected = items
+    elif sample_mode == "random":
+        selected = list(items)
+        random.Random(seed).shuffle(selected)
+    else:
+        raise ValueError(f"Unknown sample_mode={sample_mode!r}. Use 'first' or 'random'.")
+
+    if limit is not None:
+        selected = selected[:limit]
+    yield from selected
 
 
 def load_audio(path: str | Path) -> tuple[torch.Tensor, int]:

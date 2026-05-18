@@ -31,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--sample-mode", choices=["first", "random"], default="first")
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--vocoder", default=None, choices=["mel", "griffinlim", "hifigan", "command"])
     parser.add_argument("--vocoder-checkpoint", default=None)
@@ -85,7 +87,12 @@ def main() -> None:
     attack_fns = build_attacks(attacks)
     rows: list[dict[str, Any]] = []
 
-    for item in iter_ljspeech(data_root, limit=args.limit or cfg["evaluation"].get("limit")):
+    for item in iter_ljspeech(
+        data_root,
+        limit=args.limit or cfg["evaluation"].get("limit"),
+        sample_mode=args.sample_mode,
+        seed=args.seed,
+    ):
         waveform, sample_rate = load_audio(item.wav_path)
         bundle = frontend.waveform_to_normalized_logmel(waveform, sample_rate)
         message = relmel.message_from_id(item.utterance_id)

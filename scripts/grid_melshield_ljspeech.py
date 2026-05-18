@@ -39,6 +39,8 @@ def parse_args() -> argparse.Namespace:
         help="Use repro-audit for a targeted multi-group MelShield reproduction sweep.",
     )
     parser.add_argument("--limit", type=int, default=40)
+    parser.add_argument("--sample-mode", choices=["first", "random"], default="first")
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--attacks", nargs="+", default=["none", "noise20"])
     parser.add_argument("--vocoder", default=None, choices=["mel", "griffinlim", "hifigan", "command"])
@@ -122,6 +124,8 @@ def main() -> None:
             vocoder_name=vocoder_name,
             attacks=attacks,
             limit=args.limit,
+            sample_mode=args.sample_mode,
+            seed=args.seed,
             device=args.device,
             keep_outputs=args.keep_candidate_results,
         )
@@ -154,6 +158,8 @@ def run_candidate(
     vocoder_name: str,
     attacks: list[str],
     limit: int,
+    sample_mode: str,
+    seed: int,
     device: str,
     keep_outputs: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -164,7 +170,7 @@ def run_candidate(
     attack_fns = build_attacks(attacks)
     rows: list[dict[str, Any]] = []
 
-    for item in iter_ljspeech(data_root, limit=limit):
+    for item in iter_ljspeech(data_root, limit=limit, sample_mode=sample_mode, seed=seed):
         waveform, sample_rate = load_audio(item.wav_path)
         bundle = frontend.waveform_to_normalized_logmel(waveform, sample_rate)
         message = shield.message_from_id(item.utterance_id)

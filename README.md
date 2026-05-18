@@ -303,6 +303,8 @@ python scripts/grid_relmel_ljspeech.py \
   --suite relmel-audit \
   --output-dir runs/relmel_audit \
   --limit 40 \
+  --sample-mode random \
+  --seed 2026 \
   --attacks none noise20 noise10 \
   --quality-floor 3.5 \
   --noise20-weight 1.0 \
@@ -319,6 +321,8 @@ for gpu in 0 1 2 3; do
     --suite relmel-audit \
     --output-dir "runs/relmel_audit_shard_${gpu}" \
     --limit 40 \
+    --sample-mode random \
+    --seed 2026 \
     --attacks none noise20 noise10 \
     --num-shards 4 \
     --shard-index "$gpu" &
