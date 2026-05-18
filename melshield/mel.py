@@ -19,6 +19,9 @@ class MelConfig:
     f_max: Optional[float] = None
     power: float = 1.0
     eps: float = 1e-5
+    center: bool = True
+    norm: Optional[str] = "slaney"
+    mel_scale: str = "slaney"
 
     def resolved_f_max(self) -> float:
         return float(self.sample_rate / 2 if self.f_max is None else self.f_max)
@@ -64,9 +67,9 @@ class MelFrontend:
             f_max=config.resolved_f_max(),
             n_mels=config.n_mels,
             power=config.power,
-            center=True,
-            norm="slaney",
-            mel_scale="slaney",
+            center=config.center,
+            norm=config.norm,
+            mel_scale=config.mel_scale,
         ).to(self.device)
 
     def waveform_to_logmel(self, waveform: torch.Tensor, sample_rate: int) -> np.ndarray:
