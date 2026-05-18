@@ -6,6 +6,7 @@ import csv
 import itertools
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/relmel_hifigan.yaml")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--suite",
+        choices=["custom", "relmel-audit"],
+        default="custom",
+        help="Use relmel-audit for a targeted multi-group RelMel search.",
+    )
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--attacks", nargs="+", default=["none", "noise20"])
@@ -44,16 +51,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vocoder-command", default=None)
 
     parser.add_argument("--alpha-grid", nargs="+", type=float, default=[0.44])
+    parser.add_argument("--band-grid", nargs="+", default=None)
     parser.add_argument("--mask-floor-grid", nargs="+", type=float, default=[0.15])
     parser.add_argument("--boundary-margin-grid", nargs="+", type=float, default=[0.03])
     parser.add_argument("--block-frames-grid", nargs="+", type=int, default=[16])
+    parser.add_argument("--min-block-frames-grid", nargs="+", type=int, default=None)
     parser.add_argument("--bits-per-block-grid", nargs="+", type=int, default=[4])
     parser.add_argument("--pair-bins-grid", nargs="+", type=int, default=[4])
     parser.add_argument("--energy-gamma-grid", nargs="+", type=float, default=[0.5])
+    parser.add_argument("--threshold-grid", nargs="+", type=float, default=None)
+    parser.add_argument("--align-max-shift-grid", nargs="+", type=int, default=None)
 
     parser.add_argument("--quality-floor", type=float, default=3.5)
     parser.add_argument("--noise20-weight", type=float, default=1.0)
+    parser.add_argument("--noise10-weight", type=float, default=0.5)
+    parser.add_argument("--noise5-weight", type=float, default=0.25)
+    parser.add_argument("--echo-weight", type=float, default=0.25)
     parser.add_argument("--quality-weight", type=float, default=0.25)
+    parser.add_argument("--num-shards", type=int, default=1)
+    parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--keep-candidate-results", action="store_true")
     return parser.parse_args()
 
@@ -84,32 +100,45 @@ def main() -> None:
             sample_rate=mel_config.sample_rate,
         )
 
-    candidates = list(
-        itertools.product(
-            args.alpha_grid,
-            args.mask_floor_grid,
-            args.boundary_margin_grid,
-            args.block_frames_grid,
-            args.bits_per_block_grid,
-            args.pair_bins_grid,
-            args.energy_gamma_grid,
-        )
+    if args.num_shards < 1:
+        raise ValueError("--num-shards must be >= 1")
+    if not (0 <= args.shard_index < args.num_shards):
+        raise ValueError("--shard-index must satisfy 0 <= shard-index < num-shards")
+
+    base_relmel = build_relmel_config(
+        cfg,
+        argparse.Namespace(
+            alpha=None,
+            threshold=None,
+            payload_bits=None,
+            block_frames=None,
+            bits_per_block=None,
+            pair_bins=None,
+            mask_floor=None,
+            energy_gamma=None,
+            boundary_margin=None,
+        ),
     )
+    if args.suite == "relmel-audit":
+        candidates = make_relmel_audit_suite(base_relmel)
+    else:
+        candidates = make_custom_grid(base_relmel, args)
+    indexed_candidates = list(enumerate(candidates, start=1))
+    total_candidates = len(indexed_candidates)
+    if args.num_shards > 1:
+        indexed_candidates = [
+            (idx, candidate)
+            for idx, candidate in indexed_candidates
+            if (idx - 1) % args.num_shards == args.shard_index
+        ]
+        print(
+            f"running shard {args.shard_index}/{args.num_shards}: "
+            f"{len(indexed_candidates)} of {total_candidates} candidates"
+        )
     aggregate_rows: list[dict[str, Any]] = []
     best: dict[str, Any] | None = None
 
-    for idx, values in enumerate(candidates, start=1):
-        alpha, mask_floor, boundary_margin, block_frames, bits_per_block, pair_bins, energy_gamma = values
-        relmel_config = relmel_config_from_values(
-            cfg=cfg,
-            alpha=alpha,
-            mask_floor=mask_floor,
-            boundary_margin=boundary_margin,
-            block_frames=block_frames,
-            bits_per_block=bits_per_block,
-            pair_bins=pair_bins,
-            energy_gamma=energy_gamma,
-        )
+    for local_idx, (idx, (group, relmel_config)) in enumerate(indexed_candidates, start=1):
         candidate_dir = output_dir / f"candidate_{idx:03d}"
         rows, summary = run_candidate(
             data_root=data_root,
@@ -127,6 +156,7 @@ def main() -> None:
         objective = objective_from_summary(summary, args)
         flat = flatten_summary(
             candidate=idx,
+            group=group,
             objective=objective,
             relmel_config=relmel_config,
             summary=summary,
@@ -135,9 +165,18 @@ def main() -> None:
         aggregate_rows.append(flat)
         if best is None or objective > best["objective"]:
             best = flat
-        print(f"candidate {idx}/{len(candidates)} objective={objective:.4f} {flat}")
+        none_acc = flat.get("none_bit_acc")
+        noise20_acc = flat.get("noise20_bit_acc")
+        noise10_acc = flat.get("noise10_bit_acc")
+        none_pesq = flat.get("none_pesq_bm")
+        print(
+            f"candidate {idx}/{total_candidates} local={local_idx}/{len(indexed_candidates)} "
+            f"group={group} objective={objective:.4f} alpha={relmel_config.alpha} "
+            f"band={relmel_config.band[0]}:{relmel_config.band[1]} "
+            f"none={none_acc} n20={noise20_acc} n10={noise10_acc} pesq={none_pesq}"
+        )
 
-    write_grid_outputs(output_dir, aggregate_rows, best, args, cfg)
+    write_grid_outputs(output_dir, aggregate_rows, best, args, cfg, total_candidates)
     print(f"wrote grid results to {output_dir}")
 
 
@@ -154,7 +193,8 @@ def run_candidate(
     limit: int,
     keep_outputs: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if keep_outputs:
+        output_dir.mkdir(parents=True, exist_ok=True)
     relmel = RelMelMark(relmel_config)
     attack_fns = build_attacks(attacks)
     rows: list[dict[str, Any]] = []
@@ -262,6 +302,12 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_confidence": {
             attack: mean_key(attack, "confidence") for attack in sorted(grouped)
         },
+        "mean_min_votes": {
+            attack: mean_key(attack, "min_votes") for attack in sorted(grouped)
+        },
+        "mean_votes": {
+            attack: mean_key(attack, "mean_votes") for attack in sorted(grouped)
+        },
         "mean_pesq_bm": {
             attack: mean_key(attack, "pesq_bm") for attack in sorted(grouped)
         },
@@ -272,44 +318,169 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def relmel_config_from_values(
-    cfg: dict[str, Any],
-    alpha: float,
-    mask_floor: float,
-    boundary_margin: float,
-    block_frames: int,
-    bits_per_block: int,
-    pair_bins: int,
-    energy_gamma: float,
-) -> RelMelConfig:
-    class Args:
-        pass
+def make_custom_grid(
+    base: RelMelConfig, args: argparse.Namespace
+) -> list[tuple[str, RelMelConfig]]:
+    bands = [_parse_band(v) for v in (args.band_grid or [_band_to_cli(base.band)])]
+    min_block_frames_grid = args.min_block_frames_grid or [base.min_block_frames]
+    threshold_grid = args.threshold_grid or [base.threshold]
+    align_max_shift_grid = args.align_max_shift_grid or [base.align_max_shift]
+    configs: list[tuple[str, RelMelConfig]] = []
+    for (
+        alpha,
+        band,
+        mask_floor,
+        boundary_margin,
+        block_frames,
+        min_block_frames,
+        bits_per_block,
+        pair_bins,
+        energy_gamma,
+        threshold,
+        align_max_shift,
+    ) in itertools.product(
+        args.alpha_grid,
+        bands,
+        args.mask_floor_grid,
+        args.boundary_margin_grid,
+        args.block_frames_grid,
+        min_block_frames_grid,
+        args.bits_per_block_grid,
+        args.pair_bins_grid,
+        args.energy_gamma_grid,
+        threshold_grid,
+        align_max_shift_grid,
+    ):
+        configs.append(
+            (
+                "custom",
+                replace(
+                    base,
+                    alpha=float(alpha),
+                    band=band,
+                    mask_floor=float(mask_floor),
+                    boundary_margin=float(boundary_margin),
+                    block_frames=int(block_frames),
+                    min_block_frames=int(min_block_frames),
+                    bits_per_block=int(bits_per_block),
+                    pair_bins=int(pair_bins),
+                    energy_gamma=float(energy_gamma),
+                    threshold=float(threshold),
+                    align_max_shift=int(align_max_shift),
+                ),
+            )
+        )
+    return configs
 
-    args = Args()
-    args.alpha = alpha
-    args.threshold = None
-    args.payload_bits = None
-    args.block_frames = block_frames
-    args.bits_per_block = bits_per_block
-    args.pair_bins = pair_bins
-    args.mask_floor = mask_floor
-    args.energy_gamma = energy_gamma
-    args.boundary_margin = boundary_margin
-    return build_relmel_config(cfg, args)  # type: ignore[arg-type]
+
+def make_relmel_audit_suite(base: RelMelConfig) -> list[tuple[str, RelMelConfig]]:
+    candidates: list[tuple[str, RelMelConfig]] = []
+    seen: set[str] = set()
+
+    def add(group: str, cfg: RelMelConfig) -> None:
+        key = json.dumps(cfg.to_dict(), sort_keys=True)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append((group, cfg))
+
+    anchor = replace(
+        base,
+        alpha=0.43,
+        band=(20, 60),
+        block_frames=16,
+        min_block_frames=16,
+        bits_per_block=4,
+        pair_bins=4,
+        mask_floor=0.25,
+        boundary_margin=0.01,
+        energy_gamma=0.5,
+    )
+
+    for alpha in [0.38, 0.40, 0.42, 0.43, 0.44, 0.45, 0.46, 0.48]:
+        add("alpha_anchor", replace(anchor, alpha=alpha))
+
+    for alpha, band in itertools.product(
+        [0.40, 0.43, 0.45],
+        [(16, 56), (16, 60), (16, 64), (20, 56), (20, 60), (20, 64), (24, 60)],
+    ):
+        add("band", replace(anchor, alpha=alpha, band=band))
+
+    for alpha, mask_floor, boundary_margin in itertools.product(
+        [0.40, 0.43, 0.45],
+        [0.15, 0.20, 0.25, 0.30, 0.35],
+        [0.0, 0.005, 0.01, 0.02, 0.03],
+    ):
+        add(
+            "mask_boundary",
+            replace(
+                anchor,
+                alpha=alpha,
+                mask_floor=mask_floor,
+                boundary_margin=boundary_margin,
+            ),
+        )
+
+    for alpha, block_frames, bits_per_block, pair_bins in itertools.product(
+        [0.40, 0.43],
+        [8, 12, 16, 20, 24],
+        [2, 4, 6, 8],
+        [3, 4, 5, 6],
+    ):
+        add(
+            "structure",
+            replace(
+                anchor,
+                alpha=alpha,
+                block_frames=block_frames,
+                min_block_frames=min(16, block_frames),
+                bits_per_block=bits_per_block,
+                pair_bins=pair_bins,
+            ),
+        )
+
+    for alpha, energy_gamma in itertools.product(
+        [0.40, 0.43, 0.45],
+        [0.0, 0.25, 0.5, 0.75, 1.0],
+    ):
+        add("energy_gamma", replace(anchor, alpha=alpha, energy_gamma=energy_gamma))
+
+    for alpha, threshold, align_max_shift in itertools.product(
+        [0.40, 0.43],
+        [0.65, 0.70, 0.75],
+        [4, 12, 24],
+    ):
+        add(
+            "verifier",
+            replace(anchor, alpha=alpha, threshold=threshold, align_max_shift=align_max_shift),
+        )
+
+    return candidates
 
 
 def objective_from_summary(summary: dict[str, Any], args: argparse.Namespace) -> float:
     acc = summary["mean_bit_acc"]
     pesq = summary["mean_pesq_bm"]
-    none_acc = float(acc.get("none") or 0.0)
-    noise20_acc = float(acc.get("noise20") or none_acc)
+    none_acc = float(acc.get("none") if acc.get("none") is not None else 0.0)
+    noise20_acc = float(acc.get("noise20") if acc.get("noise20") is not None else none_acc)
+    noise10_acc = float(acc.get("noise10") if acc.get("noise10") is not None else 0.0)
+    noise5_acc = float(acc.get("noise5") if acc.get("noise5") is not None else 0.0)
+    echo_acc = float(acc.get("echo") if acc.get("echo") is not None else 0.0)
     none_pesq = pesq.get("none")
     penalty = 0.0 if none_pesq is None else max(0.0, args.quality_floor - float(none_pesq))
-    return none_acc + args.noise20_weight * noise20_acc - args.quality_weight * penalty
+    return (
+        none_acc
+        + args.noise20_weight * noise20_acc
+        + args.noise10_weight * noise10_acc
+        + args.noise5_weight * noise5_acc
+        + args.echo_weight * echo_acc
+        - args.quality_weight * penalty
+    )
 
 
 def flatten_summary(
     candidate: int,
+    group: str,
     objective: float,
     relmel_config: RelMelConfig,
     summary: dict[str, Any],
@@ -317,14 +488,19 @@ def flatten_summary(
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "candidate": candidate,
+        "group": group,
         "objective": objective,
         "alpha": relmel_config.alpha,
+        "band": _band_to_cli(relmel_config.band),
         "mask_floor": relmel_config.mask_floor,
         "boundary_margin": relmel_config.boundary_margin,
         "block_frames": relmel_config.block_frames,
+        "min_block_frames": relmel_config.min_block_frames,
         "bits_per_block": relmel_config.bits_per_block,
         "pair_bins": relmel_config.pair_bins,
         "energy_gamma": relmel_config.energy_gamma,
+        "threshold": relmel_config.threshold,
+        "align_max_shift": relmel_config.align_max_shift,
         "num_rows": summary["num_rows"],
     }
     for attack in attacks:
@@ -333,6 +509,8 @@ def flatten_summary(
         row[f"{attack}_pesq_bm"] = summary["mean_pesq_bm"].get(attack)
         row[f"{attack}_stoi_bm"] = summary["mean_stoi_bm"].get(attack)
         row[f"{attack}_confidence"] = summary["mean_confidence"].get(attack)
+        row[f"{attack}_min_votes"] = summary["mean_min_votes"].get(attack)
+        row[f"{attack}_mean_votes"] = summary["mean_votes"].get(attack)
     return row
 
 
@@ -342,6 +520,7 @@ def write_grid_outputs(
     best: dict[str, Any] | None,
     args: argparse.Namespace,
     cfg: dict[str, Any],
+    total_candidates: int,
 ) -> None:
     if not rows:
         return
@@ -354,6 +533,7 @@ def write_grid_outputs(
         "best": best,
         "rows": rows,
         "args": vars(args),
+        "total_candidates": total_candidates,
         "run_config": cfg,
     }
     with (output_dir / "grid_results.json").open("w", encoding="utf-8") as handle:
@@ -364,6 +544,17 @@ def write_grid_outputs(
 
 def _fmt(value: float | None) -> str:
     return "" if value is None else f"{value:.6f}"
+
+
+def _parse_band(value: str) -> tuple[int, int]:
+    if ":" not in value:
+        raise ValueError(f"Band must be formatted as start:end, got {value!r}")
+    start, end = value.split(":", maxsplit=1)
+    return int(start), int(end)
+
+
+def _band_to_cli(value: tuple[int, int]) -> str:
+    return f"{value[0]}:{value[1]}"
 
 
 if __name__ == "__main__":

@@ -291,3 +291,43 @@ python scripts/run_relmel_ljspeech.py \
 The main CSV fields are `bit_acc`, `verified`, `confidence`, `min_votes`, and
 `mean_votes`. `min_votes` should be greater than zero; if it is zero for very
 short audio, reduce `--block-frames` or increase `--bits-per-block`.
+
+For a stronger RelMel search, use the consolidated audit suite. It starts from
+the current best region around `alpha ~= 0.43`, `band = 20:60`,
+`block_frames = 16`, `bits_per_block = 4`, `pair_bins = 4`, then scans alpha,
+band, mask/boundary, block structure, energy weighting, and verifier settings:
+
+```bash
+python scripts/grid_relmel_ljspeech.py \
+  --config configs/relmel_hifigan.yaml \
+  --suite relmel-audit \
+  --output-dir runs/relmel_audit \
+  --limit 40 \
+  --attacks none noise20 noise10 \
+  --quality-floor 3.5 \
+  --noise20-weight 1.0 \
+  --noise10-weight 0.5 \
+  --quality-weight 0.35
+```
+
+If several GPUs are free, shard the same candidate list:
+
+```bash
+for gpu in 0 1 2 3; do
+  CUDA_VISIBLE_DEVICES="$gpu" python scripts/grid_relmel_ljspeech.py \
+    --config configs/relmel_hifigan.yaml \
+    --suite relmel-audit \
+    --output-dir "runs/relmel_audit_shard_${gpu}" \
+    --limit 40 \
+    --attacks none noise20 noise10 \
+    --num-shards 4 \
+    --shard-index "$gpu" &
+done
+wait
+
+python scripts/merge_grid_results.py \
+  --output-dir runs/relmel_audit_merged \
+  runs/relmel_audit_shard_*/grid_results.csv
+```
+
+Send back `grid_results.csv` and `best_candidate.json` from the merged directory.
