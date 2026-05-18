@@ -20,6 +20,7 @@ class RelMelConfig:
     band: tuple[int, int] = (20, 56)
     threshold: float = 0.75
     block_frames: int = 32
+    block_stride: Optional[int] = None
     min_block_frames: int = 16
     bits_per_block: int = 16
     pair_bins: int = 3
@@ -218,13 +219,18 @@ class RelMelMark:
         self, frames: int, cfg: Optional[RelMelConfig] = None
     ) -> list[tuple[int, int, int]]:
         cfg = self.config if cfg is None else cfg
+        stride = cfg.block_frames if cfg.block_stride is None else cfg.block_stride
+        if stride < 1:
+            raise ValueError("block_stride must be >= 1 when provided.")
         blocks: list[tuple[int, int, int]] = []
         block_idx = 0
-        for start in range(0, frames, cfg.block_frames):
+        for start in range(0, frames, stride):
             end = min(frames, start + cfg.block_frames)
             if end - start >= cfg.min_block_frames:
                 blocks.append((block_idx, start, end))
                 block_idx += 1
+            if end == frames:
+                break
         return blocks
 
     def _active_bits(

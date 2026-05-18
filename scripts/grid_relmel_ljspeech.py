@@ -57,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mask-floor-grid", nargs="+", type=float, default=[0.15])
     parser.add_argument("--boundary-margin-grid", nargs="+", type=float, default=[0.03])
     parser.add_argument("--block-frames-grid", nargs="+", type=int, default=[16])
+    parser.add_argument("--block-stride-grid", nargs="+", type=int, default=None)
     parser.add_argument("--min-block-frames-grid", nargs="+", type=int, default=None)
     parser.add_argument("--bits-per-block-grid", nargs="+", type=int, default=[4])
     parser.add_argument("--pair-bins-grid", nargs="+", type=int, default=[4])
@@ -114,6 +115,7 @@ def main() -> None:
             threshold=None,
             payload_bits=None,
             block_frames=None,
+            block_stride=None,
             bits_per_block=None,
             pair_bins=None,
             mask_floor=None,
@@ -329,6 +331,7 @@ def make_custom_grid(
 ) -> list[tuple[str, RelMelConfig]]:
     bands = [_parse_band(v) for v in (args.band_grid or [_band_to_cli(base.band)])]
     min_block_frames_grid = args.min_block_frames_grid or [base.min_block_frames]
+    block_stride_grid = args.block_stride_grid or [base.block_stride]
     threshold_grid = args.threshold_grid or [base.threshold]
     align_max_shift_grid = args.align_max_shift_grid or [base.align_max_shift]
     configs: list[tuple[str, RelMelConfig]] = []
@@ -338,6 +341,7 @@ def make_custom_grid(
         mask_floor,
         boundary_margin,
         block_frames,
+        block_stride,
         min_block_frames,
         bits_per_block,
         pair_bins,
@@ -350,6 +354,7 @@ def make_custom_grid(
         args.mask_floor_grid,
         args.boundary_margin_grid,
         args.block_frames_grid,
+        block_stride_grid,
         min_block_frames_grid,
         args.bits_per_block_grid,
         args.pair_bins_grid,
@@ -367,6 +372,7 @@ def make_custom_grid(
                     mask_floor=float(mask_floor),
                     boundary_margin=float(boundary_margin),
                     block_frames=int(block_frames),
+                    block_stride=None if block_stride is None else int(block_stride),
                     min_block_frames=int(min_block_frames),
                     bits_per_block=int(bits_per_block),
                     pair_bins=int(pair_bins),
@@ -501,6 +507,7 @@ def flatten_summary(
         "mask_floor": relmel_config.mask_floor,
         "boundary_margin": relmel_config.boundary_margin,
         "block_frames": relmel_config.block_frames,
+        "block_stride": relmel_config.block_stride,
         "min_block_frames": relmel_config.min_block_frames,
         "bits_per_block": relmel_config.bits_per_block,
         "pair_bins": relmel_config.pair_bins,

@@ -77,6 +77,7 @@ def _coerce_row(row: dict[str, str]) -> dict[str, Any]:
         if key in {
             "candidate",
             "block_frames",
+            "block_stride",
             "min_block_frames",
             "bits_per_block",
             "pair_bins",

@@ -20,6 +20,7 @@ relmel:
   band: [20, 56]
   threshold: 0.75
   block_frames: 32
+  block_stride:
   min_block_frames: 16
   bits_per_block: 16
   pair_bins: 3

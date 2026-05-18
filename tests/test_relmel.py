@@ -33,3 +33,44 @@ def test_relmel_roundtrip_in_mel_domain(tmp_path) -> None:
     loaded = RelMelReference.load(path)
     result = marker.extract(watermarked, loaded)
     assert result.bit_accuracy == 1.0
+
+
+def test_relmel_overlap_blocks_increase_votes() -> None:
+    rng = np.random.default_rng(17)
+    clean = rng.uniform(0.15, 0.85, size=(80, 96)).astype(np.float32)
+    base = RelMelConfig(
+        payload_bits=32,
+        key="relmel-overlap-test",
+        alpha=0.08,
+        band=(20, 56),
+        block_frames=8,
+        bits_per_block=6,
+        pair_bins=4,
+        min_block_frames=8,
+    )
+    overlap = RelMelConfig(
+        payload_bits=32,
+        key="relmel-overlap-test",
+        alpha=0.08,
+        band=(20, 56),
+        block_frames=8,
+        block_stride=4,
+        bits_per_block=6,
+        pair_bins=4,
+        min_block_frames=8,
+    )
+
+    base_marker = RelMelMark(base)
+    overlap_marker = RelMelMark(overlap)
+    message = base_marker.message_from_id("utt-overlap")
+    stats = NormalizationStats(-8.0, 2.0)
+    mel_config = MelConfig()
+
+    base_wm, base_ref = base_marker.embed(clean, message, "utt-overlap", stats, mel_config)
+    overlap_wm, overlap_ref = overlap_marker.embed(clean, message, "utt-overlap", stats, mel_config)
+
+    base_result = base_marker.extract(base_wm, base_ref)
+    overlap_result = overlap_marker.extract(overlap_wm, overlap_ref)
+    assert base_result.bit_accuracy == 1.0
+    assert overlap_result.bit_accuracy == 1.0
+    assert overlap_result.votes.mean() > base_result.votes.mean()

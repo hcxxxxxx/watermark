@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threshold", type=float, default=None)
     parser.add_argument("--payload-bits", type=int, default=None)
     parser.add_argument("--block-frames", type=int, default=None)
+    parser.add_argument("--block-stride", type=int, default=None)
     parser.add_argument("--bits-per-block", type=int, default=None)
     parser.add_argument("--pair-bins", type=int, default=None)
     parser.add_argument("--mask-floor", type=float, default=None)
@@ -160,6 +161,7 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
         "threshold": args.threshold,
         "payload_bits": args.payload_bits,
         "block_frames": args.block_frames,
+        "block_stride": args.block_stride,
         "bits_per_block": args.bits_per_block,
         "pair_bins": args.pair_bins,
         "mask_floor": args.mask_floor,
@@ -218,6 +220,12 @@ def write_outputs(
         },
         "mean_confidence": {
             attack: mean_key(attack, "confidence") for attack in sorted(grouped)
+        },
+        "mean_min_votes": {
+            attack: mean_key(attack, "min_votes") for attack in sorted(grouped)
+        },
+        "mean_votes": {
+            attack: mean_key(attack, "mean_votes") for attack in sorted(grouped)
         },
         "mean_pesq_bm": {
             attack: mean_key(attack, "pesq_bm") for attack in sorted(grouped)
