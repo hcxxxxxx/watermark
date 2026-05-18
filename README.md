@@ -226,3 +226,38 @@ python scripts/run_research_melshield_ljspeech.py \
 The research CSV reports both `payload_bit_acc` and `code_bit_acc`.
 `payload_bit_acc` is the main attribution metric after soft-ECC decoding;
 `code_bit_acc` is the raw embedded-codeword accuracy before error correction.
+
+## RelMelMark Prototype
+
+`RelMelMark` is an alternate Mel-domain idea: instead of adding random
+spread-spectrum noise, it encodes each bit as a keyed relative-energy difference
+between two Mel-bin groups inside repeated time blocks. A bit value controls
+which group is raised and which group is lowered, keeping each local update
+approximately energy-balanced.
+
+Run a small alpha sweep:
+
+```bash
+for a in 0.03 0.04 0.05 0.06 0.07 0.08; do
+  python scripts/run_relmel_ljspeech.py \
+    --config configs/relmel_hifigan.yaml \
+    --alpha "$a" \
+    --attacks none noise20 \
+    --limit 40 \
+    --output-dir "runs/relmel_alpha_${a}_quick"
+done
+```
+
+Then run the best candidate on the full attack suite:
+
+```bash
+python scripts/run_relmel_ljspeech.py \
+  --config configs/relmel_hifigan.yaml \
+  --alpha 0.06 \
+  --limit 100 \
+  --output-dir runs/relmel_alpha_0.06_attacks
+```
+
+The main CSV fields are `bit_acc`, `verified`, `confidence`, `min_votes`, and
+`mean_votes`. `min_votes` should be greater than zero; if it is zero for very
+short audio, reduce `--block-frames` or increase `--bits-per-block`.
