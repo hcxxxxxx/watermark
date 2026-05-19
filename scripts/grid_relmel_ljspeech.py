@@ -19,8 +19,12 @@ import torch
 import yaml
 
 from scripts.run_relmel_ljspeech import (
+    build_codec,
     build_relmel_config,
+    info_payload_bits,
     load_yaml,
+    payload_from_id,
+    result_row as relmel_result_row,
     write_outputs,
 )
 from melshield.attacks import build_attacks
@@ -51,6 +55,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vocoder-checkpoint", default=None)
     parser.add_argument("--vocoder-config", default=None)
     parser.add_argument("--vocoder-command", default=None)
+    parser.add_argument("--payload-bits", type=int, default=None)
+    parser.add_argument("--info-bits", type=int, default=None)
+    parser.add_argument("--ecc-repeat", type=int, default=1)
+    parser.add_argument("--no-ecc-interleave", action="store_true")
 
     parser.add_argument("--alpha-grid", nargs="+", type=float, default=[0.44])
     parser.add_argument("--band-grid", nargs="+", default=None)
@@ -113,7 +121,10 @@ def main() -> None:
         argparse.Namespace(
             alpha=None,
             threshold=None,
-            payload_bits=None,
+            payload_bits=args.payload_bits,
+            info_bits=args.info_bits,
+            ecc_repeat=args.ecc_repeat,
+            no_ecc_interleave=args.no_ecc_interleave,
             block_frames=None,
             block_stride=None,
             bits_per_block=None,
@@ -141,6 +152,7 @@ def main() -> None:
         )
     aggregate_rows: list[dict[str, Any]] = []
     best: dict[str, Any] | None = None
+    codec = build_codec(args)
 
     for local_idx, (idx, (group, relmel_config)) in enumerate(indexed_candidates, start=1):
         candidate_dir = output_dir / f"candidate_{idx:03d}"
@@ -157,6 +169,7 @@ def main() -> None:
             limit=args.limit,
             sample_mode=args.sample_mode,
             seed=args.seed,
+            codec=codec,
             keep_outputs=args.keep_candidate_results,
         )
         objective = objective_from_summary(summary, args)
@@ -174,12 +187,14 @@ def main() -> None:
         none_acc = flat.get("none_bit_acc")
         noise20_acc = flat.get("noise20_bit_acc")
         noise10_acc = flat.get("noise10_bit_acc")
+        noise5_acc = flat.get("noise5_bit_acc")
         none_pesq = flat.get("none_pesq_bm")
         print(
             f"candidate {idx}/{total_candidates} local={local_idx}/{len(indexed_candidates)} "
             f"group={group} objective={objective:.4f} alpha={relmel_config.alpha} "
             f"band={relmel_config.band[0]}:{relmel_config.band[1]} "
-            f"none={none_acc} n20={noise20_acc} n10={noise10_acc} pesq={none_pesq}"
+            f"none={none_acc} n20={noise20_acc} n10={noise10_acc} "
+            f"n5={noise5_acc} pesq={none_pesq}"
         )
 
     write_grid_outputs(output_dir, aggregate_rows, best, args, cfg, total_candidates)
@@ -199,18 +214,21 @@ def run_candidate(
     limit: int,
     sample_mode: str,
     seed: int,
+    codec: Any,
     keep_outputs: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if keep_outputs:
         output_dir.mkdir(parents=True, exist_ok=True)
     relmel = RelMelMark(relmel_config)
+    info_bits = info_payload_bits(relmel_config, codec)
     attack_fns = build_attacks(attacks)
     rows: list[dict[str, Any]] = []
 
     for item in iter_ljspeech(data_root, limit=limit, sample_mode=sample_mode, seed=seed):
         waveform, sample_rate = load_audio(item.wav_path)
         bundle = frontend.waveform_to_normalized_logmel(waveform, sample_rate)
-        message = relmel.message_from_id(item.utterance_id)
+        payload_message = payload_from_id(relmel_config, item.utterance_id, info_bits)
+        message = codec.encode(payload_message)
         watermarked_norm, reference = relmel.embed(
             clean_mel=bundle.normalized,
             message=message,
@@ -221,7 +239,17 @@ def run_candidate(
 
         if vocoder_name == "mel":
             result = relmel.extract(watermarked_norm, reference)
-            rows.append(result_row(item.utterance_id, "none", result, "", "", "", ""))
+            rows.append(
+                relmel_result_row(
+                    item.utterance_id,
+                    "none",
+                    result,
+                    relmel_config,
+                    codec,
+                    payload_message,
+                )
+                | empty_metrics()
+            )
             continue
 
         clean_log_mel = torch.from_numpy(bundle.log_mel)
@@ -250,6 +278,9 @@ def run_candidate(
                     item.utterance_id,
                     attack_name,
                     result,
+                    relmel_config,
+                    codec,
+                    payload_message,
                     _fmt(gt_metrics.pesq),
                     _fmt(gt_metrics.stoi),
                     _fmt(bm_metrics.pesq),
@@ -258,6 +289,12 @@ def run_candidate(
             )
 
     summary = summarize_rows(rows)
+    summary["coding_config"] = {
+        "payload_bits": info_bits,
+        "code_bits": relmel_config.payload_bits,
+        "ecc_repeat": codec.repeat,
+        "interleave": codec.interleave,
+    }
     if keep_outputs:
         write_outputs(output_dir, rows, cfg, mel_config, relmel_config)
     return rows, summary
@@ -267,25 +304,31 @@ def result_row(
     utterance_id: str,
     attack: str,
     result: Any,
+    relmel_config: RelMelConfig,
+    codec: Any,
+    payload_message: np.ndarray,
     pesq_gt: str,
     stoi_gt: str,
     pesq_bm: str,
     stoi_bm: str,
 ) -> dict[str, Any]:
-    votes = result.votes[result.votes > 0]
-    return {
-        "utterance_id": utterance_id,
-        "attack": attack,
-        "bit_acc": result.bit_accuracy,
-        "verified": result.verified,
-        "confidence": float(np.mean(np.abs(result.scores))),
-        "min_votes": int(votes.min()) if votes.size else 0,
-        "mean_votes": float(votes.mean()) if votes.size else 0.0,
+    row = relmel_result_row(
+        utterance_id,
+        attack,
+        result,
+        relmel_config,
+        codec,
+        payload_message,
+    )
+    row.update(
+        {
         "pesq_gt": pesq_gt,
         "stoi_gt": stoi_gt,
         "pesq_bm": pesq_bm,
         "stoi_bm": stoi_bm,
-    }
+        }
+    )
+    return row
 
 
 def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -309,6 +352,26 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "mean_confidence": {
             attack: mean_key(attack, "confidence") for attack in sorted(grouped)
+        },
+        "mean_payload_bit_acc": {
+            attack: mean_key(attack, "payload_bit_acc") for attack in sorted(grouped)
+        },
+        "payload_verification_rate": {
+            attack: float(np.mean([bool(row["payload_verified"]) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
+        "mean_payload_confidence": {
+            attack: mean_key(attack, "payload_confidence") for attack in sorted(grouped)
+        },
+        "mean_code_bit_acc": {
+            attack: mean_key(attack, "code_bit_acc") for attack in sorted(grouped)
+        },
+        "code_verification_rate": {
+            attack: float(np.mean([bool(row["code_verified"]) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
+        "mean_code_confidence": {
+            attack: mean_key(attack, "code_confidence") for attack in sorted(grouped)
         },
         "mean_min_votes": {
             attack: mean_key(attack, "min_votes") for attack in sorted(grouped)
@@ -514,14 +577,24 @@ def flatten_summary(
         "energy_gamma": relmel_config.energy_gamma,
         "threshold": relmel_config.threshold,
         "align_max_shift": relmel_config.align_max_shift,
+        "payload_bits": summary["coding_config"]["payload_bits"],
+        "code_bits": summary["coding_config"]["code_bits"],
+        "ecc_repeat": summary["coding_config"]["ecc_repeat"],
+        "ecc_interleave": summary["coding_config"]["interleave"],
         "num_rows": summary["num_rows"],
     }
     for attack in attacks:
         row[f"{attack}_bit_acc"] = summary["mean_bit_acc"].get(attack)
         row[f"{attack}_verified"] = summary["verification_rate"].get(attack)
+        row[f"{attack}_payload_bit_acc"] = summary["mean_payload_bit_acc"].get(attack)
+        row[f"{attack}_payload_verified"] = summary["payload_verification_rate"].get(attack)
+        row[f"{attack}_code_bit_acc"] = summary["mean_code_bit_acc"].get(attack)
+        row[f"{attack}_code_verified"] = summary["code_verification_rate"].get(attack)
         row[f"{attack}_pesq_bm"] = summary["mean_pesq_bm"].get(attack)
         row[f"{attack}_stoi_bm"] = summary["mean_stoi_bm"].get(attack)
         row[f"{attack}_confidence"] = summary["mean_confidence"].get(attack)
+        row[f"{attack}_payload_confidence"] = summary["mean_payload_confidence"].get(attack)
+        row[f"{attack}_code_confidence"] = summary["mean_code_confidence"].get(attack)
         row[f"{attack}_min_votes"] = summary["mean_min_votes"].get(attack)
         row[f"{attack}_mean_votes"] = summary["mean_votes"].get(attack)
     return row

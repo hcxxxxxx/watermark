@@ -83,6 +83,9 @@ def _coerce_row(row: dict[str, str]) -> dict[str, Any]:
             "pair_bins",
             "align_max_shift",
             "smooth_frames",
+            "payload_bits",
+            "code_bits",
+            "ecc_repeat",
             "num_rows",
         }:
             coerced[key] = int(numeric)

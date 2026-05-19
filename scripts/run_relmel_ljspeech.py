@@ -18,11 +18,13 @@ import torch
 import yaml
 
 from melshield.attacks import build_attacks
+from melshield.coding import RepetitionCode, bit_accuracy, mean_abs_confidence
 from melshield.datasets import iter_ljspeech, load_audio, save_audio
 from melshield.mel import MelConfig, MelFrontend
 from melshield.metrics import compare_audio
 from melshield.relmel import RelMelConfig, RelMelMark
 from melshield.vocoders import build_vocoder
+from melshield.watermark import deterministic_bits
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +46,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha", type=float, default=None)
     parser.add_argument("--threshold", type=float, default=None)
     parser.add_argument("--payload-bits", type=int, default=None)
+    parser.add_argument("--info-bits", type=int, default=None)
+    parser.add_argument("--ecc-repeat", type=int, default=1)
+    parser.add_argument("--no-ecc-interleave", action="store_true")
     parser.add_argument("--block-frames", type=int, default=None)
     parser.add_argument("--block-stride", type=int, default=None)
     parser.add_argument("--bits-per-block", type=int, default=None)
@@ -66,6 +71,8 @@ def main() -> None:
 
     mel_config = MelConfig(**cfg["mel"])
     relmel_config = build_relmel_config(cfg, args)
+    codec = build_codec(args)
+    info_bits = info_payload_bits(relmel_config, codec)
     vocoder_name = args.vocoder or cfg["vocoder"]["name"]
     attacks = args.attacks or cfg["evaluation"]["attacks"]
     if vocoder_name == "mel":
@@ -96,7 +103,8 @@ def main() -> None:
     ):
         waveform, sample_rate = load_audio(item.wav_path)
         bundle = frontend.waveform_to_normalized_logmel(waveform, sample_rate)
-        message = relmel.message_from_id(item.utterance_id)
+        payload_message = payload_from_id(relmel_config, item.utterance_id, info_bits)
+        message = codec.encode(payload_message)
         watermarked_norm, reference = relmel.embed(
             clean_mel=bundle.normalized,
             message=message,
@@ -108,7 +116,17 @@ def main() -> None:
 
         if vocoder_name == "mel":
             result = relmel.extract(watermarked_norm, reference)
-            rows.append(result_row(item.utterance_id, "none", result) | empty_metrics())
+            rows.append(
+                result_row(
+                    item.utterance_id,
+                    "none",
+                    result,
+                    relmel_config,
+                    codec,
+                    payload_message,
+                )
+                | empty_metrics()
+            )
             continue
 
         assert vocoder is not None
@@ -137,7 +155,14 @@ def main() -> None:
                 attacked.waveform,
                 attacked.sample_rate,
             )
-            row = result_row(item.utterance_id, attack_name, result)
+            row = result_row(
+                item.utterance_id,
+                attack_name,
+                result,
+                relmel_config,
+                codec,
+                payload_message,
+            )
             row.update(
                 {
                     "pesq_gt": _fmt(gt_metrics.pesq),
@@ -156,10 +181,12 @@ def main() -> None:
 def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMelConfig:
     data = dict(cfg["relmel"])
     data["band"] = tuple(data["band"])
+    ecc_repeat = getattr(args, "ecc_repeat", 1) or 1
+    info_bits = getattr(args, "info_bits", None)
     overrides = {
         "alpha": args.alpha,
         "threshold": args.threshold,
-        "payload_bits": args.payload_bits,
+        "payload_bits": info_bits if info_bits is not None else args.payload_bits,
         "block_frames": args.block_frames,
         "block_stride": args.block_stride,
         "bits_per_block": args.bits_per_block,
@@ -171,17 +198,67 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
     for key, value in overrides.items():
         if value is not None:
             data[key] = value
+    if ecc_repeat > 1:
+        data["payload_bits"] = int(data["payload_bits"]) * int(ecc_repeat)
     return RelMelConfig(**data)
 
 
-def result_row(utterance_id: str, attack: str, result: Any) -> dict[str, Any]:
+def build_codec(args: argparse.Namespace) -> RepetitionCode:
+    repeat = int(getattr(args, "ecc_repeat", 1) or 1)
+    interleave = not bool(getattr(args, "no_ecc_interleave", False))
+    return RepetitionCode(repeat=repeat, interleave=interleave)
+
+
+def info_payload_bits(relmel_config: RelMelConfig, codec: RepetitionCode) -> int:
+    if relmel_config.payload_bits % codec.repeat != 0:
+        raise ValueError(
+            f"Codeword length {relmel_config.payload_bits} is not divisible by "
+            f"ecc repeat={codec.repeat}."
+        )
+    return relmel_config.payload_bits // codec.repeat
+
+
+def payload_from_id(
+    relmel_config: RelMelConfig,
+    utterance_id: str,
+    info_bits: int,
+    namespace: str = "payload",
+) -> np.ndarray:
+    return deterministic_bits(
+        key=f"{relmel_config.key}|{namespace}",
+        identifier=utterance_id,
+        length=info_bits,
+    )
+
+
+def result_row(
+    utterance_id: str,
+    attack: str,
+    result: Any,
+    relmel_config: RelMelConfig,
+    codec: RepetitionCode,
+    payload_message: np.ndarray,
+) -> dict[str, Any]:
     votes = result.votes[result.votes > 0]
+    payload_decoded, payload_scores = codec.decode_scores(result.scores)
+    payload_acc = bit_accuracy(payload_message, payload_decoded)
+    payload_verified = bool(payload_acc >= relmel_config.threshold)
     return {
         "utterance_id": utterance_id,
         "attack": attack,
-        "bit_acc": result.bit_accuracy,
-        "verified": result.verified,
-        "confidence": float(np.mean(np.abs(result.scores))),
+        "bit_acc": payload_acc,
+        "verified": payload_verified,
+        "confidence": mean_abs_confidence(payload_scores),
+        "payload_bit_acc": payload_acc,
+        "payload_verified": payload_verified,
+        "payload_confidence": mean_abs_confidence(payload_scores),
+        "code_bit_acc": result.bit_accuracy,
+        "code_verified": result.verified,
+        "code_confidence": mean_abs_confidence(result.scores),
+        "payload_bits": int(payload_message.size),
+        "code_bits": int(result.scores.size),
+        "ecc_repeat": int(codec.repeat),
+        "ecc_interleave": bool(codec.interleave),
         "min_votes": int(votes.min()) if votes.size else 0,
         "mean_votes": float(votes.mean()) if votes.size else 0.0,
     }
@@ -221,6 +298,26 @@ def write_outputs(
         "mean_confidence": {
             attack: mean_key(attack, "confidence") for attack in sorted(grouped)
         },
+        "mean_payload_bit_acc": {
+            attack: mean_key(attack, "payload_bit_acc") for attack in sorted(grouped)
+        },
+        "payload_verification_rate": {
+            attack: float(np.mean([bool(row["payload_verified"]) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
+        "mean_payload_confidence": {
+            attack: mean_key(attack, "payload_confidence") for attack in sorted(grouped)
+        },
+        "mean_code_bit_acc": {
+            attack: mean_key(attack, "code_bit_acc") for attack in sorted(grouped)
+        },
+        "code_verification_rate": {
+            attack: float(np.mean([bool(row["code_verified"]) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
+        "mean_code_confidence": {
+            attack: mean_key(attack, "code_confidence") for attack in sorted(grouped)
+        },
         "mean_min_votes": {
             attack: mean_key(attack, "min_votes") for attack in sorted(grouped)
         },
@@ -234,6 +331,12 @@ def write_outputs(
             attack: mean_key(attack, "stoi_bm") for attack in sorted(grouped)
         },
         "num_rows": len(rows),
+        "coding_config": {
+            "payload_bits": int(rows[0]["payload_bits"]) if rows else relmel_config.payload_bits,
+            "code_bits": int(rows[0]["code_bits"]) if rows else relmel_config.payload_bits,
+            "ecc_repeat": int(rows[0]["ecc_repeat"]) if rows else 1,
+            "interleave": bool(rows[0]["ecc_interleave"]) if rows else True,
+        },
         "mel_config": mel_config.to_dict(),
         "relmel_config": relmel_config.to_dict(),
         "run_config": cfg,
