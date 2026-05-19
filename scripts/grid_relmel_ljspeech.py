@@ -69,6 +69,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-block-frames-grid", nargs="+", type=int, default=None)
     parser.add_argument("--bits-per-block-grid", nargs="+", type=int, default=[4])
     parser.add_argument("--pair-bins-grid", nargs="+", type=int, default=[4])
+    parser.add_argument("--pair-candidates-grid", nargs="+", type=int, default=None)
+    parser.add_argument("--detector-mode-grid", nargs="+", choices=["plain", "boundary"], default=None)
     parser.add_argument("--energy-gamma-grid", nargs="+", type=float, default=[0.5])
     parser.add_argument("--threshold-grid", nargs="+", type=float, default=None)
     parser.add_argument("--align-max-shift-grid", nargs="+", type=int, default=None)
@@ -129,6 +131,8 @@ def main() -> None:
             block_stride=None,
             bits_per_block=None,
             pair_bins=None,
+            pair_candidates=None,
+            detector_mode=None,
             mask_floor=None,
             energy_gamma=None,
             boundary_margin=None,
@@ -395,6 +399,8 @@ def make_custom_grid(
     bands = [_parse_band(v) for v in (args.band_grid or [_band_to_cli(base.band)])]
     min_block_frames_grid = args.min_block_frames_grid or [base.min_block_frames]
     block_stride_grid = args.block_stride_grid or [base.block_stride]
+    pair_candidates_grid = args.pair_candidates_grid or [base.pair_candidates]
+    detector_mode_grid = args.detector_mode_grid or [base.detector_mode]
     threshold_grid = args.threshold_grid or [base.threshold]
     align_max_shift_grid = args.align_max_shift_grid or [base.align_max_shift]
     configs: list[tuple[str, RelMelConfig]] = []
@@ -408,6 +414,8 @@ def make_custom_grid(
         min_block_frames,
         bits_per_block,
         pair_bins,
+        pair_candidates,
+        detector_mode,
         energy_gamma,
         threshold,
         align_max_shift,
@@ -421,6 +429,8 @@ def make_custom_grid(
         min_block_frames_grid,
         args.bits_per_block_grid,
         args.pair_bins_grid,
+        pair_candidates_grid,
+        detector_mode_grid,
         args.energy_gamma_grid,
         threshold_grid,
         align_max_shift_grid,
@@ -439,6 +449,8 @@ def make_custom_grid(
                     min_block_frames=int(min_block_frames),
                     bits_per_block=int(bits_per_block),
                     pair_bins=int(pair_bins),
+                    pair_candidates=int(pair_candidates),
+                    detector_mode=str(detector_mode),
                     energy_gamma=float(energy_gamma),
                     threshold=float(threshold),
                     align_max_shift=int(align_max_shift),
@@ -574,6 +586,8 @@ def flatten_summary(
         "min_block_frames": relmel_config.min_block_frames,
         "bits_per_block": relmel_config.bits_per_block,
         "pair_bins": relmel_config.pair_bins,
+        "pair_candidates": relmel_config.pair_candidates,
+        "detector_mode": relmel_config.detector_mode,
         "energy_gamma": relmel_config.energy_gamma,
         "threshold": relmel_config.threshold,
         "align_max_shift": relmel_config.align_max_shift,

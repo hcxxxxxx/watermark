@@ -24,6 +24,8 @@ class RelMelConfig:
     min_block_frames: int = 16
     bits_per_block: int = 16
     pair_bins: int = 3
+    pair_candidates: int = 1
+    detector_mode: str = "plain"
     mask_floor: float = 0.15
     energy_gamma: float = 0.5
     boundary_margin: float = 0.03
@@ -98,6 +100,10 @@ class RelMelMark:
 
     def __init__(self, config: RelMelConfig) -> None:
         self.config = config
+        if config.pair_candidates < 1:
+            raise ValueError("pair_candidates must be >= 1.")
+        if config.detector_mode not in {"plain", "boundary"}:
+            raise ValueError("detector_mode must be 'plain' or 'boundary'.")
 
     def message_from_id(self, utterance_id: str, namespace: str = "payload") -> np.ndarray:
         return deterministic_bits(
@@ -136,12 +142,18 @@ class RelMelMark:
             active_scale = 1.0 / float(np.sqrt(max(len(active_bits), 1)))
             for bit_idx in active_bits:
                 polarity = 1.0 if int(message_arr[bit_idx]) == 1 else -1.0
-                pair = self._pair_vector(bit_idx, block_idx, x_band.shape[0], utterance_id)
+                pair = self._pair_vector(
+                    bit_idx,
+                    block_idx,
+                    x_band.shape[0],
+                    utterance_id,
+                    block=x_band[:, start:end],
+                )
                 update = polarity * block_weight * active_scale * pair.reshape(-1, 1)
                 layer[:, start:end] += update
                 counts[:, start:end] += np.abs(pair).reshape(-1, 1)
 
-        boundary = self._boundary_mask(x_band)
+        boundary = self._boundary_mask(x_band, cfg=self.config)
         # Keep heavily reused bins from receiving disproportionate energy.
         reuse = np.maximum(counts, 1.0)
         perturbation = self.config.alpha * boundary * layer / np.sqrt(reuse)
@@ -192,9 +204,10 @@ class RelMelMark:
                     reference.utterance_id,
                     key=used_key,
                     cfg=cfg,
+                    block=clean_band[:, start:end],
                 )
                 # Relative energy score: positive means group A gained vs group B.
-                raw_score = float(np.mean(block_residual * pair.reshape(-1, 1)))
+                raw_score = self._block_score(block_residual, pair, clean_band[:, start:end], cfg)
                 scores[bit_idx] += raw_score * block_weight * active_scale
                 votes[bit_idx] += 1.0
 
@@ -258,17 +271,71 @@ class RelMelMark:
         utterance_id: str,
         key: Optional[str] = None,
         cfg: Optional[RelMelConfig] = None,
+        block: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         cfg = self.config if cfg is None else cfg
         pair_bins = min(cfg.pair_bins, max(1, band_bins // 2))
-        seed = _seed_from_parts(
-            key or cfg.key,
+        if cfg.pair_candidates == 1 or block is None:
+            return self._random_pair_vector(
+                bit_idx,
+                block_idx,
+                band_bins,
+                utterance_id,
+                pair_bins,
+                key=key or cfg.key,
+                cfg=cfg,
+            )
+
+        reliability = self._bin_reliability(block, cfg)
+        best_pair: Optional[np.ndarray] = None
+        best_score = -np.inf
+        for candidate_idx in range(cfg.pair_candidates):
+            pair = self._random_pair_vector(
+                bit_idx,
+                block_idx,
+                band_bins,
+                utterance_id,
+                pair_bins,
+                key=key or cfg.key,
+                cfg=cfg,
+                candidate_idx=candidate_idx,
+            )
+            pos = pair > 0
+            neg = pair < 0
+            pos_rel = float(np.mean(reliability[pos]))
+            neg_rel = float(np.mean(reliability[neg]))
+            score = min(pos_rel, neg_rel) - 0.25 * abs(pos_rel - neg_rel)
+            if score > best_score:
+                best_score = score
+                best_pair = pair
+        if best_pair is None:
+            raise RuntimeError("Failed to select a RelMel pair vector.")
+        return best_pair.astype(np.float32)
+
+    def _random_pair_vector(
+        self,
+        bit_idx: int,
+        block_idx: int,
+        band_bins: int,
+        utterance_id: str,
+        pair_bins: int,
+        key: str,
+        cfg: RelMelConfig,
+        candidate_idx: Optional[int] = None,
+    ) -> np.ndarray:
+        seed_parts = [
+            key,
             utterance_id,
             "pair",
             str(bit_idx),
             str(block_idx),
             str(band_bins),
             str(pair_bins),
+        ]
+        if candidate_idx is not None:
+            seed_parts.extend(["candidate", str(candidate_idx)])
+        seed = _seed_from_parts(
+            *seed_parts,
         )
         rng = np.random.default_rng(seed)
         selected = rng.choice(band_bins, size=2 * pair_bins, replace=False)
@@ -277,6 +344,28 @@ class RelMelMark:
         pair[selected[pair_bins:]] = -1.0
         pair /= float(np.sqrt(2 * pair_bins))
         return pair.astype(np.float32)
+
+    def _block_score(
+        self,
+        block_residual: np.ndarray,
+        pair: np.ndarray,
+        clean_block: np.ndarray,
+        cfg: RelMelConfig,
+    ) -> float:
+        if cfg.detector_mode == "plain":
+            pattern = pair.reshape(-1, 1)
+        elif cfg.detector_mode == "boundary":
+            pattern = pair.reshape(-1, 1) * self._boundary_mask(clean_block, cfg=cfg)
+        else:
+            raise ValueError(f"Unsupported detector_mode={cfg.detector_mode!r}")
+        return float(np.mean(block_residual * pattern))
+
+    def _bin_reliability(self, block: np.ndarray, cfg: RelMelConfig) -> np.ndarray:
+        block = _as_mel(block)
+        boundary = self._boundary_mask(block, cfg=cfg)
+        energy = np.clip(block, 0.0, 1.0) ** cfg.energy_gamma
+        reliability = boundary * (cfg.mask_floor + (1.0 - cfg.mask_floor) * energy)
+        return np.maximum(np.mean(reliability, axis=1), 1.0e-8).astype(np.float32)
 
     def _block_weight(
         self, block: np.ndarray, cfg: Optional[RelMelConfig] = None
@@ -287,11 +376,14 @@ class RelMelMark:
         # while keeping quiet blocks active enough for short utterances.
         return float(cfg.mask_floor + (1.0 - cfg.mask_floor) * np.clip(energy, 0.0, 1.0) ** cfg.energy_gamma)
 
-    def _boundary_mask(self, x_band: np.ndarray) -> np.ndarray:
-        if self.config.boundary_margin <= 0:
+    def _boundary_mask(
+        self, x_band: np.ndarray, cfg: Optional[RelMelConfig] = None
+    ) -> np.ndarray:
+        cfg = self.config if cfg is None else cfg
+        if cfg.boundary_margin <= 0:
             return np.ones_like(x_band, dtype=np.float32)
         headroom = np.minimum(x_band, 1.0 - x_band)
-        return np.clip(headroom / self.config.boundary_margin, 0.0, 1.0).astype(np.float32)
+        return np.clip(headroom / cfg.boundary_margin, 0.0, 1.0).astype(np.float32)
 
     def _checked_band(
         self, n_mels: int, band: Optional[tuple[int, int]] = None

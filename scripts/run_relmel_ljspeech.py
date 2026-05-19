@@ -53,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--block-stride", type=int, default=None)
     parser.add_argument("--bits-per-block", type=int, default=None)
     parser.add_argument("--pair-bins", type=int, default=None)
+    parser.add_argument("--pair-candidates", type=int, default=None)
+    parser.add_argument("--detector-mode", choices=["plain", "boundary"], default=None)
     parser.add_argument("--mask-floor", type=float, default=None)
     parser.add_argument("--energy-gamma", type=float, default=None)
     parser.add_argument("--boundary-margin", type=float, default=None)
@@ -191,6 +193,8 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
         "block_stride": args.block_stride,
         "bits_per_block": args.bits_per_block,
         "pair_bins": args.pair_bins,
+        "pair_candidates": args.pair_candidates,
+        "detector_mode": args.detector_mode,
         "mask_floor": args.mask_floor,
         "energy_gamma": args.energy_gamma,
         "boundary_margin": args.boundary_margin,

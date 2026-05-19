@@ -66,7 +66,15 @@ def _coerce_row(row: dict[str, str]) -> dict[str, Any]:
         if value == "":
             coerced[key] = None
             continue
-        if key in {"group", "band", "mask_mode", "norm", "mel_scale", "center"}:
+        if key in {
+            "group",
+            "band",
+            "mask_mode",
+            "detector_mode",
+            "norm",
+            "mel_scale",
+            "center",
+        }:
             coerced[key] = value
             continue
         try:
@@ -81,6 +89,7 @@ def _coerce_row(row: dict[str, str]) -> dict[str, Any]:
             "min_block_frames",
             "bits_per_block",
             "pair_bins",
+            "pair_candidates",
             "align_max_shift",
             "smooth_frames",
             "payload_bits",
