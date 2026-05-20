@@ -6,8 +6,9 @@ CHECKPOINT="${DIFFWAVE_CHECKPOINT:-external/diffwave/checkpoints/diffwave-ljspee
 LIMIT="${LIMIT:-60}"
 SEED="${SEED:-2026}"
 DEVICE="${DEVICE:-cuda}"
+DIFFWAVE_SEED="${DIFFWAVE_SEED:-0}"
 
-DIFFWAVE_CMD="python scripts/diffwave_vocoder.py ${CHECKPOINT} {mel_npy} --output {audio_wav} --device ${DEVICE} --fast"
+DIFFWAVE_CMD="python scripts/diffwave_vocoder.py ${CHECKPOINT} {mel_npy} --output {audio_wav} --device ${DEVICE} --fast --seed ${DIFFWAVE_SEED}"
 
 case "${MODE}" in
   smoke)

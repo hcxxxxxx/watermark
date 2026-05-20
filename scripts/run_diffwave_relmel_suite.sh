@@ -4,8 +4,9 @@ set -euo pipefail
 CHECKPOINT="${1:-external/diffwave/checkpoints/diffwave-ljspeech-22kHz-1000578.pt}"
 LIMIT="${2:-60}"
 SEED="${3:-2026}"
+DIFFWAVE_SEED="${DIFFWAVE_SEED:-0}"
 
-DIFFWAVE_CMD="python scripts/diffwave_vocoder.py ${CHECKPOINT} {mel_npy} --output {audio_wav} --fast"
+DIFFWAVE_CMD="python scripts/diffwave_vocoder.py ${CHECKPOINT} {mel_npy} --output {audio_wav} --fast --seed ${DIFFWAVE_SEED}"
 
 python scripts/grid_relmel_ljspeech.py \
   --config configs/relmel_diffwave.yaml \

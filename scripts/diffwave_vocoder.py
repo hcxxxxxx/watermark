@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import random
 import sys
 from pathlib import Path
 from typing import Literal
@@ -66,6 +67,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to save the converted DiffWave conditioning .npy.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help=(
+            "Optional RNG seed for DiffWave sampling. Use a fixed value when "
+            "comparing clean and watermarked Mel inputs so PESQ reflects the "
+            "watermark perturbation rather than diffusion sampling randomness."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -117,6 +128,7 @@ def synthesize(
     output: str | Path,
     device: str,
     fast: bool,
+    seed: int | None,
 ) -> None:
     try:
         from diffwave.inference import predict as diffwave_predict
@@ -125,6 +137,13 @@ def synthesize(
             "Could not import diffwave. Install it in this environment with "
             "`pip install diffwave` or `pip install -e external/diffwave`."
         ) from exc
+
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     tensor = torch.from_numpy(np.ascontiguousarray(spectrogram, dtype=np.float32))
     audio, sample_rate = diffwave_predict(
@@ -147,7 +166,7 @@ def main() -> None:
         debug_path = Path(args.debug_save_spec)
         debug_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(debug_path, spectrogram)
-    synthesize(args.model, spectrogram, args.output, args.device, args.fast)
+    synthesize(args.model, spectrogram, args.output, args.device, args.fast, args.seed)
 
 
 if __name__ == "__main__":
