@@ -61,6 +61,37 @@ Short interpretation:
 
 ## Reliable Pair Candidate Ablation
 
+### Random 500 Ablation
+
+Fixed configuration:
+
+- alpha 0.435
+- band 20:60
+- mask_floor 0.20
+- boundary_margin 0.01
+- block_frames 8
+- block_stride 8
+- bits_per_block 6
+- pair_bins 6
+- detector_mode plain
+- random 500 samples, seed 2026
+- attacks: none, noise20, noise10, noise5
+
+| pair_candidates | PESQ none | none | noise20 | noise10 | noise5 | Observation |
+|---:|---:|---:|---:|---:|---:|---|
+| 1 | 3.5485 | 0.9999 | 0.9459 | 0.7674 | 0.6684 | Old random-pair baseline |
+| 4 | 3.5299 | 0.9999 | 0.9873 | 0.8894 | 0.7845 | Large improvement |
+| 8 | 3.5184 | 0.9999 | 0.9918 | 0.9232 | 0.8315 | Strong reliable-pair setting |
+| 16 | 3.5102 | 0.9999 | 0.9952 | 0.9439 | 0.8607 | Best robustness in this sweep |
+
+Short interpretation:
+
+- This is now the strongest ablation evidence for the paper.
+- Increasing pair_candidates from 1 to 16 improves noise20 by 4.9 points, noise10 by 17.7 points, and noise5 by 19.2 points.
+- PESQ changes only from 3.5485 to 3.5102, so the robustness gain is not simply caused by much lower perceptual quality.
+
+### Random 60 Pilot Ablation
+
 Fixed configuration:
 
 - alpha 0.435
@@ -82,11 +113,42 @@ Fixed configuration:
 | 8 | 3.5217 | 1.0000 | 0.9901 | 0.9219 | 0.8214 | Strong reliable-pair setting |
 | 16 | 3.4888 | 0.9995 | 0.9943 | 0.9370 | 0.8646 | Best robustness in this sweep |
 
-Short interpretation:
+Pilot interpretation:
 
 - The largest method-level gain comes from pair_candidates, not from detector_mode.
 - The improvement is monotonic or nearly monotonic on noise robustness from 1 to 16 candidates.
-- This should become a core ablation table in the paper.
+- This pilot trend is confirmed by the random-500 ablation above.
+
+## Multi-Seed Stability
+
+Main reliable-pair configuration:
+
+- alpha 0.435
+- band 20:60
+- mask_floor 0.20
+- boundary_margin 0.01
+- block_frames 8
+- block_stride 8
+- bits_per_block 6
+- pair_bins 6
+- pair_candidates 16
+- detector_mode plain
+- random 500 samples
+- attacks: none, noise20, noise10, noise5
+
+| Seed | PESQ none | none | noise20 | noise10 | noise5 |
+|---:|---:|---:|---:|---:|---:|
+| 2026 | 3.5102 | 0.9999 | 0.9952 | 0.9439 | 0.8607 |
+| 2027 | 3.5108 | 0.9999 | 0.9950 | 0.9411 | 0.8588 |
+| 2028 | 3.5164 | 0.9998 | 0.9938 | 0.9391 | 0.8574 |
+| Mean | 3.5125 | 0.9999 | 0.9946 | 0.9413 | 0.8590 |
+
+Short interpretation:
+
+- The main reliable-pair configuration is stable across random seeds.
+- The standard variation is small relative to the improvement over the reproduced MelShield baseline.
+- For paper tables, use the full-attack random-500 result as the main result and this table as robustness-to-sampling evidence.
+- Do not mix this key-attack-only table with the full-attack table as if they were produced by the exact same command; use each table with its own stated protocol.
 
 ## Detector Mode Observation
 

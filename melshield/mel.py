@@ -20,6 +20,7 @@ class MelConfig:
     power: float = 1.0
     eps: float = 1e-5
     center: bool = True
+    normalized: bool = False
     norm: Optional[str] = "slaney"
     mel_scale: str = "slaney"
 
@@ -68,6 +69,7 @@ class MelFrontend:
             n_mels=config.n_mels,
             power=config.power,
             center=config.center,
+            normalized=config.normalized,
             norm=config.norm,
             mel_scale=config.mel_scale,
         ).to(self.device)

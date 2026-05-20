@@ -165,20 +165,36 @@ full attack list in `scripts/run_melshield_ljspeech.py`.
 ## DiffWave / Other Vocoders
 
 The watermark itself is vocoder-agnostic. For DiffWave, use the command adapter
-with the official DiffWave inference script from your server checkout. The
-external command must accept a raw log-Mel `.npy` and write a `.wav`:
+with `scripts/diffwave_vocoder.py`. The wrapper converts this project's raw
+natural-log Mel `.npy` into the normalized conditioning format expected by the
+official LMNT DiffWave checkpoint:
 
 ```bash
-python scripts/run_melshield_ljspeech.py \
-  --config configs/melshield_ljspeech.yaml \
+python scripts/run_relmel_ljspeech.py \
+  --config configs/relmel_diffwave.yaml \
+  --output-dir runs/relmel_diffwave_smoke \
+  --limit 5 \
+  --attacks none noise20 \
   --vocoder command \
-  --vocoder-command "python external/diffwave/inference.py --spectrogram_path {mel_npy} --output {audio_wav}" \
-  --alpha 0.025 \
-  --payload-bits 32 \
-  --limit 100
+  --vocoder-command "python scripts/diffwave_vocoder.py external/diffwave/checkpoints/diffwave-ljspeech-22kHz-1000578.pt {mel_npy} --output {audio_wav} --fast" \
+  --save-audio
 ```
 
-The paper uses `alpha = 0.025` for DiffWave.
+For paper-style runs, use:
+
+```bash
+LIMIT=60 ./scripts/run_diffwave_paper_suite.sh smoke
+LIMIT=60 ./scripts/run_diffwave_paper_suite.sh relmel-stage1
+LIMIT=500 ./scripts/run_diffwave_paper_suite.sh relmel-full
+LIMIT=500 ./scripts/run_diffwave_paper_suite.sh relmel-pair-ablation
+LIMIT=500 ./scripts/run_diffwave_paper_suite.sh melshield-baseline
+```
+
+The Mel settings in `configs/relmel_diffwave.yaml` and
+`configs/melshield_diffwave.yaml` match the official DiffWave preprocessing
+parameters: 22.05 kHz audio, 80 Mel bins, FFT 1024, hop 256, window 1024,
+frequency range 20 Hz to Nyquist, HTK Mel scale, no Slaney normalization, and
+STFT normalization enabled.
 
 ## One-file Verification
 

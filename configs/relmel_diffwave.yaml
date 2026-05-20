@@ -1,0 +1,46 @@
+paths:
+  data_root: data/LJSpeech-1.1
+  output_dir: runs/relmel_diffwave
+
+mel:
+  sample_rate: 22050
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  f_min: 20.0
+  f_max:
+  power: 1.0
+  eps: 1.0e-5
+  center: true
+  normalized: true
+  norm:
+  mel_scale: htk
+
+relmel:
+  payload_bits: 32
+  key: change-this-secret-key
+  alpha: 0.435
+  band: [20, 60]
+  threshold: 0.75
+  block_frames: 8
+  block_stride: 8
+  min_block_frames: 8
+  bits_per_block: 6
+  pair_bins: 6
+  pair_candidates: 16
+  detector_mode: plain
+  mask_floor: 0.20
+  energy_gamma: 0.5
+  boundary_margin: 0.01
+  align_max_shift: 12
+
+vocoder:
+  name: command
+  checkpoint:
+  config:
+  command:
+
+evaluation:
+  limit:
+  attacks: [none, mp3, aac, scale, rs16, bandpass, lowpass, noise20, noise10, noise5, echo]
