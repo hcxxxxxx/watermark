@@ -9,3 +9,20 @@ data/
 checkpoints/
 runs/
 external/
+# 大文件 - 自动添加
+*.bz2
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.npy
+
+# 缓存与编译
+__pycache__/
+*.pyc
+*.pyo
+
+# 数据集
+*.wav
+*.flac
