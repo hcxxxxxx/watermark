@@ -5,7 +5,7 @@
 ## 结论速览
 
 - HiFi-GAN 条件下，RelMel 可靠候选对版本在干净 PESQ 约 3.51 时，显著优于本地复现的 MelShield。
-- DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于本地复现的 MelShield，但 MelShield 本地复现的干净 PESQ 更高，因此还需要做一个 MelShield + DiffWave 的质量边缘扫描。
+- DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于本地复现的 MelShield。MelShield + DiffWave 的质量边缘 pilot 已定位到 `alpha=0.060, band=20:60, mask_floor=0.05`，后续需要跑 random500 全攻击确认。
 - MelShield 论文 reported 数据只能作为外部参考；最公平的主结论应优先基于同一代码、同一声码器、同一攻击、同一指标下的本地复现实验。
 
 ## 主对比表
@@ -18,6 +18,7 @@
 | HiFi-GAN | RelMel | 可靠候选对，pair_candidates 16 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | 当前 HiFi-GAN 主结果 |
 | DiffWave | MelShield | 原文 reported | 论文 | 不直接匹配 | 1.0000 | 0.9834 | 0.7788 | 0.7006 | 外部参考 |
 | DiffWave | MelShield | 本地复现，alpha 0.05，band 20:56 | 500 | 3.8779 | 0.9996 | 0.9383 | 0.7725 | 0.6824 | 当前本地基线，音质偏高 |
+| DiffWave | MelShield | 质量边缘 pilot，alpha 0.060，band 20:60，mf 0.05 | 40 | 3.5450 | 1.0000 | 0.9617 | 待补 | 待补 | 推荐后续 random500 全攻击 |
 | DiffWave | RelMel | alpha 0.35，mask_floor 0.20，boundary_margin 0.01 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | 当前 DiffWave 主结果 |
 
 ## RelMel 主配置
@@ -97,6 +98,19 @@
 
 相同 random500、全攻击协议下，RelMel + DiffWave 相比本地复现 MelShield + DiffWave：`noise20` 提升 5.3 个百分点，`noise10` 提升 15.0 个百分点，`noise5` 提升 14.8 个百分点。不过 MelShield 这组配置干净 PESQ 更高，因此还应补跑质量边缘版本。
 
+### DiffWave 质量边缘 pilot
+
+本组实验用于寻找与 RelMel + DiffWave 主配置干净 PESQ 更接近的 MelShield + DiffWave 参数。random40，攻击为 `none noise20 noise10 noise5`。
+
+| candidate | alpha | band | mask_floor | 干净 PESQ | none | noise20 | 选择说明 |
+|---:|---:|---|---:|---:|---:|---:|---|
+| 5 | 0.060 | 20:56 | 0.05 | 3.5732 | 1.0000 | 0.9602 | 音质略高 |
+| 6 | 0.060 | 20:56 | 0.075 | 3.5667 | 1.0000 | 0.9633 | pilot objective 最高 |
+| 7 | 0.060 | 20:60 | 0.05 | 3.5450 | 1.0000 | 0.9617 | 与 RelMel + DiffWave 的 PESQ 3.5443 最接近，推荐后续 random500 |
+| 8 | 0.060 | 20:60 | 0.075 | 3.5392 | 1.0000 | 0.9617 | 更接近 3.5，但 PESQ 略低于 RelMel |
+
+`alpha=0.065` 的候选已经低于 3.5 PESQ，因此不适合作为质量合格的主对照。推荐使用 candidate 7 的配置跑 random500 全攻击。
+
 ## 关键消融实验
 
 ### 可靠候选对数量消融
@@ -136,9 +150,9 @@ RelMel + DiffWave 的有用强度区间集中在 `alpha=0.30` 到 `0.35`。当�
 
 ## 下一步实验命令
 
-### MelShield + DiffWave 质量边缘扫描
+### MelShield + DiffWave 质量边缘 random500 全攻击
 
-目标：寻找干净 PESQ 刚好高于 3.5 的 MelShield + DiffWave 配置，再用该配置的 `noise20`、`noise10`、`noise5` 与 RelMel + DiffWave 对比。
+目标：用质量边缘 pilot 选出的 candidate 7 跑 random500 全攻击，再用该配置的 `noise20`、`noise10`、`noise5` 与 RelMel + DiffWave 对比。
 
 后台运行版本：
 
@@ -148,44 +162,37 @@ mkdir -p logs
 nohup python scripts/grid_melshield_ljspeech.py \
   --config configs/melshield_diffwave.yaml \
   --suite custom \
-  --output-dir runs/melshield_diffwave_quality_edge_random40_seed2026 \
-  --limit 40 \
+  --output-dir runs/melshield_diffwave_a006_mf005_bm002_band2060_attacks_random500 \
+  --limit 500 \
   --sample-mode random \
   --seed 2026 \
-  --attacks none noise20 noise10 noise5 \
+  --attacks none mp3 aac scale rs16 bandpass lowpass noise20 noise10 noise5 echo \
   --device cuda \
   --vocoder command \
   --vocoder-command "python scripts/diffwave_vocoder.py external/diffwave/checkpoints/diffwave-ljspeech-22kHz-1000578.pt {mel_npy} --output {audio_wav} --device cuda --fast --seed 0" \
-  --alpha-grid 0.055 0.060 0.065 0.070 0.075 0.080 \
-  --band-grid 20:56 20:60 \
-  --mask-floor-grid 0.05 0.075 \
+  --alpha-grid 0.060 \
+  --band-grid 20:60 \
+  --mask-floor-grid 0.05 \
   --energy-gamma-grid 0.75 \
   --boundary-margin-grid 0.02 \
   --threshold-grid 0.61 \
   --align-max-shift-grid 12 \
   --headroom-grid 0.0 \
-  --quality-floor 3.5 \
-  --noise20-weight 1.0 \
-  --quality-weight 2.5 \
   --keep-candidate-results \
-  > logs/melshield_diffwave_quality_edge_random40_seed2026.log 2>&1 &
+  > logs/melshield_diffwave_a006_mf005_bm002_band2060_attacks_random500.log 2>&1 &
 ```
 
 查看日志：
 
 ```bash
-tail -f logs/melshield_diffwave_quality_edge_random40_seed2026.log
+tail -f logs/melshield_diffwave_a006_mf005_bm002_band2060_attacks_random500.log
 ```
 
-选择规则：
-
-- 先保留 `none_pesq_bm >= 3.5` 的候选。
-- 在这些候选中，优先选 `none_pesq_bm` 最接近 3.5 且仍高于 3.5 的配置。
-- 选定后再用相同参数跑 random500 全攻击。
+预期用途：跑完后替换主对比表中的 MelShield + DiffWave 质量边缘 pilot 行。
 
 ## 写论文时的口径
 
 - reported 数据和本地复现数据要分开表述，不能混成同一个公平协议。
 - HiFi-GAN 的主对比已经基本完整：RelMel 在相近干净 PESQ 下明显强于本地复现 MelShield。
-- DiffWave 的 RelMel 结果已经很强，但为了更严谨，还需要补一个 MelShield + DiffWave 的质量边缘复现。
+- DiffWave 的 RelMel 结果已经很强；质量边缘 pilot 已选出 MelShield + DiffWave candidate 7，后续用 random500 全攻击确认即可。
 - 方法贡献建议表述为：基于块级相对 Mel 关系的可靠候选对选择机制，提高了水印在加性噪声下的稳定性。
