@@ -244,6 +244,15 @@ class WavMarkWatermarker:
     def detect(self, audio: torch.Tensor, payload: np.ndarray) -> dict[str, Any]:
         signal = tensor_to_numpy(audio)
         decoded, info = self.wavmark.decode_watermark(self.model, signal, show_progress=False)
+        if decoded is None:
+            confidence = wavmark_confidence(info)
+            return {
+                "bit_acc": 0.0,
+                "detected": False,
+                "verified": False,
+                "detection_score": confidence if confidence is not None else "",
+                "confidence": confidence if confidence is not None else "",
+            }
         decoded_np = np.asarray(decoded, dtype=np.uint8).reshape(-1)[: payload.size]
         if decoded_np.size != payload.size:
             decoded_np = np.zeros_like(payload)
