@@ -71,7 +71,46 @@ DiffWave RelMel results are promising, but the matched MelShield-DiffWave baseli
 | HiFi-GAN | MelShield | Reproduced, alpha 0.05, band 20:60 | 100 | 3.5069 | 1.0000 | 0.9072 | 0.7097 | 0.6391 | Matched local baseline |
 | HiFi-GAN | MelShield | Reproduced, alpha 0.055, band 20:60 | 100 | 3.4324 | 1.0000 | 0.9269 | 0.7325 | 0.6475 | Stronger but below the 3.5 quality target |
 | HiFi-GAN | RelMel reliable-pair | pc16, full attacks, random 500 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | Main matched RelMel result |
+| DiffWave | MelShield | Stage1 best, alpha 0.05, band 20:56 | 60 | 3.8563 | 0.9995 | 0.9406 | 0.7714 | 0.6818 | Preliminary matched baseline; random500 full attack running |
 | DiffWave | RelMel reliable-pair | alpha 0.35, mf 0.20, bm 0.01, full attacks, random 500 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | Main RelMel-DiffWave result; matched MelShield-DiffWave baseline still needed |
+
+## DiffWave MelShield Reproduction Results
+
+These runs use the same fixed DiffWave sampling seed as the RelMel-DiffWave runs:
+
+```text
+python scripts/diffwave_vocoder.py ... --device cuda --fast --seed 0
+```
+
+### Stage1 Key-Attack Sweep
+
+Random 60 samples, seed 2026, attacks: none, noise20, noise10, noise5.
+Fixed parameters: mask_floor 0.05, energy_gamma 0.75, boundary_margin 0.02, threshold 0.61, align_max_shift 12, headroom 0.0.
+
+| alpha | band | PESQ none | none | noise20 | noise10 | noise5 | Observation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 0.015 | 20:56 | 4.4415 | 0.9323 | 0.6828 | 0.5833 | 0.5542 | High quality, weak detection |
+| 0.015 | 20:60 | 4.4443 | 0.9396 | 0.6854 | 0.5964 | 0.5667 | High quality, weak detection |
+| 0.020 | 20:56 | 4.3902 | 0.9698 | 0.7328 | 0.6255 | 0.5703 | Improving robustness |
+| 0.020 | 20:60 | 4.3977 | 0.9755 | 0.7406 | 0.6240 | 0.5828 | Improving robustness |
+| 0.025 | 20:56 | 4.3279 | 0.9859 | 0.7885 | 0.6344 | 0.5948 | Default-like strength |
+| 0.025 | 20:60 | 4.3418 | 0.9901 | 0.7938 | 0.6464 | 0.5990 | Default-like strength |
+| 0.030 | 20:56 | 4.2576 | 0.9948 | 0.8266 | 0.6750 | 0.6063 | Better noise20 |
+| 0.030 | 20:60 | 4.2709 | 0.9948 | 0.8365 | 0.6802 | 0.6135 | Better noise20 |
+| 0.035 | 20:56 | 4.1789 | 0.9979 | 0.8724 | 0.7078 | 0.6271 | Moderate robustness |
+| 0.035 | 20:60 | 4.1898 | 0.9969 | 0.8698 | 0.7104 | 0.6417 | Moderate robustness |
+| 0.040 | 20:56 | 4.0822 | 0.9990 | 0.9031 | 0.7292 | 0.6495 | Stronger, still high quality |
+| 0.040 | 20:60 | 4.0836 | 0.9984 | 0.9026 | 0.7344 | 0.6479 | Stronger, still high quality |
+| 0.045 | 20:56 | 3.9699 | 0.9995 | 0.9260 | 0.7552 | 0.6615 | Stronger baseline |
+| 0.045 | 20:60 | 3.9761 | 0.9990 | 0.9260 | 0.7573 | 0.6703 | Stronger baseline |
+| 0.050 | 20:56 | 3.8563 | 0.9995 | 0.9406 | 0.7714 | 0.6818 | Stage1 best objective |
+| 0.050 | 20:60 | 3.8467 | 0.9995 | 0.9396 | 0.7677 | 0.6870 | Slightly higher noise5, lower overall objective |
+
+Current MelShield-DiffWave baseline choice:
+
+- Use alpha 0.05 and band 20:56 for the full random500 run, because it has the best stage1 objective and strong noise20/noise10 while keeping PESQ 3.8563.
+- A random500 full-attack run with this configuration is currently running.
+- The preliminary stage1 gap to RelMel-DiffWave is large on additive noise: RelMel-DiffWave random500 has noise20 0.9914, noise10 0.9225, and noise5 0.8308.
 
 ## DiffWave RelMel Results
 
