@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--message-threshold", type=float, default=0.5)
     parser.add_argument("--audioseal-generator", default="audioseal_wm_16bits")
     parser.add_argument("--audioseal-detector", default="audioseal_detector_16bits")
+    parser.add_argument(
+        "--wavmark-checkpoint",
+        default=None,
+        help="Optional local WavMark checkpoint path. Use this on offline servers.",
+    )
     parser.add_argument("--save-audio", action="store_true")
     return parser.parse_args()
 
@@ -218,7 +223,7 @@ class WavMarkWatermarker:
         self.sample_rate = 16000
         self.payload_bits = int(args.payload_bits)
         self.bit_acc_threshold = float(args.bit_acc_threshold)
-        self.model = wavmark.load_model().to(self.device)
+        self.model = wavmark.load_model(args.wavmark_checkpoint or "default").to(self.device)
         self.model.eval()
         if self.payload_bits != 16:
             raise ValueError(
