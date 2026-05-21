@@ -71,8 +71,8 @@ DiffWave RelMel results are promising, but the matched MelShield-DiffWave baseli
 | HiFi-GAN | MelShield | Reproduced, alpha 0.05, band 20:60 | 100 | 3.5069 | 1.0000 | 0.9072 | 0.7097 | 0.6391 | Matched local baseline |
 | HiFi-GAN | MelShield | Reproduced, alpha 0.055, band 20:60 | 100 | 3.4324 | 1.0000 | 0.9269 | 0.7325 | 0.6475 | Stronger but below the 3.5 quality target |
 | HiFi-GAN | RelMel reliable-pair | pc16, full attacks, random 500 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | Main matched RelMel result |
-| DiffWave | MelShield | Stage1 best, alpha 0.05, band 20:56 | 60 | 3.8563 | 0.9995 | 0.9406 | 0.7714 | 0.6818 | Preliminary matched baseline; random500 full attack running |
-| DiffWave | RelMel reliable-pair | alpha 0.35, mf 0.20, bm 0.01, full attacks, random 500 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | Main RelMel-DiffWave result; matched MelShield-DiffWave baseline still needed |
+| DiffWave | MelShield | alpha 0.05, band 20:56, full attacks, random 500 | 500 | 3.8779 | 0.9996 | 0.9383 | 0.7725 | 0.6824 | Matched local baseline |
+| DiffWave | RelMel reliable-pair | alpha 0.35, mf 0.20, bm 0.01, full attacks, random 500 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | Main RelMel-DiffWave result |
 
 ## DiffWave MelShield Reproduction Results
 
@@ -109,8 +109,46 @@ Fixed parameters: mask_floor 0.05, energy_gamma 0.75, boundary_margin 0.02, thre
 Current MelShield-DiffWave baseline choice:
 
 - Use alpha 0.05 and band 20:56 for the full random500 run, because it has the best stage1 objective and strong noise20/noise10 while keeping PESQ 3.8563.
-- A random500 full-attack run with this configuration is currently running.
-- The preliminary stage1 gap to RelMel-DiffWave is large on additive noise: RelMel-DiffWave random500 has noise20 0.9914, noise10 0.9225, and noise5 0.8308.
+- The random500 full-attack result below confirms this choice.
+- The matched random500 gap to RelMel-DiffWave is large on additive noise: RelMel-DiffWave has noise20 0.9914, noise10 0.9225, and noise5 0.8308.
+
+### Main Full-Attack Result
+
+Configuration:
+
+| Parameter | Value |
+|---|---:|
+| alpha | 0.05 |
+| band | 20:56 |
+| mask_floor | 0.05 |
+| energy_gamma | 0.75 |
+| boundary_margin | 0.02 |
+| threshold | 0.61 |
+| align_max_shift | 12 |
+| headroom | 0.0 |
+| mask_mode | energy |
+
+Full attacks, random 500 samples, seed 2026:
+
+| Attack | Bit Acc | Verification Rate | PESQ BM | STOI BM |
+|---|---:|---:|---:|---:|
+| none | 0.9996 | 1.000 | 3.8779 | 0.9662 |
+| mp3 | 0.9994 | 1.000 | 3.8770 | 0.9661 |
+| aac | 0.9995 | 1.000 | 3.8545 | 0.9659 |
+| scale | 0.9996 | 1.000 | 3.8779 | 0.9662 |
+| rs16 | 0.9982 | 1.000 | 3.8779 | 0.9662 |
+| bandpass | 0.9976 | 1.000 | 3.8782 | 0.9610 |
+| lowpass | 0.9869 | 1.000 | 3.9093 | 0.9659 |
+| noise20 | 0.9383 | 0.998 | 1.4972 | 0.9488 |
+| noise10 | 0.7725 | 0.940 | 1.0779 | 0.8983 |
+| noise5 | 0.6824 | 0.800 | 1.0349 | 0.8478 |
+| echo | 0.9945 | 1.000 | 1.6347 | 0.9167 |
+
+Short interpretation:
+
+- This is the matched MelShield-DiffWave local baseline.
+- MelShield-DiffWave has higher none PESQ than RelMel-DiffWave, but substantially lower additive-noise robustness.
+- Under the same random500 full-attack protocol, RelMel-DiffWave improves noise20 by 5.3 points, noise10 by 15.0 points, and noise5 by 14.8 points.
 
 ## DiffWave RelMel Results
 
