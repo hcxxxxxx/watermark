@@ -59,6 +59,131 @@ Short interpretation:
 | RelMel reliable-pair, pc16 | 100 | 3.4939 | 0.9997 | 0.9941 | 0.9456 | 0.8688 | Main candidate, random 100 |
 | RelMel reliable-pair, pc16 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | Main candidate, random 500 |
 
+## Current RelMel vs MelShield Comparable Data
+
+This table separates matched reproduced comparisons from external reported numbers.
+At this point, the strongest matched RelMel-vs-MelShield comparison is still HiFi-GAN.
+DiffWave RelMel results are promising, but the matched MelShield-DiffWave baseline has not been run yet.
+
+| Vocoder | Method | Source / Run | Samples | PESQ none | none | noise20 | noise10 | noise5 | Comparison Status |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| HiFi-GAN | MelShield | Reported in MelShield paper | paper | n/a | 1.0000 | 1.0000 | 0.7815 | 0.7052 | External reference, not directly quality-matched |
+| HiFi-GAN | MelShield | Reproduced, alpha 0.05, band 20:60 | 100 | 3.5069 | 1.0000 | 0.9072 | 0.7097 | 0.6391 | Matched local baseline |
+| HiFi-GAN | MelShield | Reproduced, alpha 0.055, band 20:60 | 100 | 3.4324 | 1.0000 | 0.9269 | 0.7325 | 0.6475 | Stronger but below the 3.5 quality target |
+| HiFi-GAN | RelMel reliable-pair | pc16, full attacks, random 500 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | Main matched RelMel result |
+| DiffWave | RelMel reliable-pair | alpha 0.35, mf 0.20, bm 0.01, full attacks, random 500 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | Main RelMel-DiffWave result; matched MelShield-DiffWave baseline still needed |
+
+## DiffWave RelMel Results
+
+These runs use the DiffWave command vocoder with fixed sampling seed:
+
+```text
+python scripts/diffwave_vocoder.py ... --device cuda --fast --seed 0
+```
+
+The fixed DiffWave seed is important because otherwise clean and watermarked Mel inputs are synthesized with different diffusion noise, which makes PESQ BM include vocoder sampling randomness.
+
+### Main Full-Attack Result
+
+Configuration:
+
+| Parameter | Value |
+|---|---:|
+| alpha | 0.35 |
+| band | 20:60 |
+| mask_floor | 0.20 |
+| boundary_margin | 0.01 |
+| block_frames | 8 |
+| block_stride | 8 |
+| bits_per_block | 6 |
+| pair_bins | 6 |
+| pair_candidates | 16 |
+| detector_mode | plain |
+| payload_bits | 32 |
+| ecc_repeat | 1 |
+
+Full attacks, random 500 samples, seed 2026:
+
+| Attack | Bit Acc | Verification Rate | PESQ BM | STOI BM |
+|---|---:|---:|---:|---:|
+| none | 0.9998 | 1.000 | 3.5443 | 0.9612 |
+| mp3 | 0.9998 | 1.000 | 3.5428 | 0.9612 |
+| aac | 0.9998 | 1.000 | 3.5191 | 0.9609 |
+| scale | 0.9998 | 1.000 | 3.5443 | 0.9612 |
+| rs16 | 0.9998 | 1.000 | 3.5443 | 0.9612 |
+| bandpass | 0.9998 | 1.000 | 3.5227 | 0.9559 |
+| lowpass | 0.9989 | 1.000 | 3.6133 | 0.9612 |
+| noise20 | 0.9914 | 1.000 | 1.4930 | 0.9438 |
+| noise10 | 0.9225 | 0.984 | 1.0787 | 0.8932 |
+| noise5 | 0.8308 | 0.852 | 1.0351 | 0.8437 |
+| echo | 0.9971 | 1.000 | 1.6116 | 0.9128 |
+
+Short interpretation:
+
+- This is the current strongest RelMel-DiffWave result.
+- It satisfies the 3.5 PESQ target while keeping strong noise robustness on random 500.
+- Compared with the HiFi-GAN RelMel main result, DiffWave keeps slightly higher none PESQ but lower additive-noise robustness, especially on noise10 and noise5.
+- A matched MelShield-DiffWave baseline is still required before making a final DiffWave-specific superiority claim.
+
+### Seeded Pipeline Diagnostic
+
+Alpha-zero probe, random 20 samples, seed 2026, attack: none only.
+
+| alpha | PESQ none | none Bit Acc | Interpretation |
+|---:|---:|---:|---|
+| 0.00 | 4.6439 | 0.4906 | DiffWave reconstruction is high quality; no-watermark detection is near random as expected |
+
+### Seeded Quality-Robustness Sweep
+
+Random 40 samples, seed 2026, attacks: none, noise20, noise10, noise5.
+The table keeps the best objective candidate for each alpha from the broad sweep.
+
+| alpha | mask_floor | boundary_margin | PESQ none | none | noise20 | noise10 | noise5 | Observation |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0.12 | 0.25 | 0.005 | 4.3938 | 0.9945 | 0.8563 | 0.7102 | 0.6367 | Very high quality, weak robustness |
+| 0.15 | 0.20 | 0.010 | 4.3390 | 0.9984 | 0.8984 | 0.7477 | 0.6680 | Still quality-heavy |
+| 0.18 | 0.20 | 0.010 | 4.2731 | 0.9992 | 0.9367 | 0.7891 | 0.7141 | Better noise robustness |
+| 0.22 | 0.20 | 0.010 | 4.1421 | 1.0000 | 0.9539 | 0.8352 | 0.7320 | Good quality margin |
+| 0.26 | 0.20 | 0.010 | 3.9866 | 1.0000 | 0.9734 | 0.8563 | 0.7672 | Stronger robustness with good quality |
+| 0.30 | 0.25 | 0.005 | 3.7717 | 1.0000 | 0.9820 | 0.8922 | 0.8000 | First clearly strong DiffWave point |
+
+Short interpretation:
+
+- DiffWave needs a lower RelMel strength than HiFi-GAN for the same 3.5 PESQ target.
+- The useful DiffWave strength range is around alpha 0.30 to 0.35.
+- The alpha-zero diagnostic confirms that the low PESQ seen in the unseeded run was a sampling-comparison artifact, not a Mel-format failure.
+
+### Alpha Edge Sweep
+
+Random 40 samples, seed 2026, fixed mask_floor 0.25 and boundary_margin 0.005.
+
+| alpha | PESQ none | none | noise20 | noise10 | noise5 | Interpretation |
+|---:|---:|---:|---:|---:|---:|---|
+| 0.30 | 3.7717 | 1.0000 | 0.9797 | 0.8859 | 0.7852 | Safe quality margin |
+| 0.34 | 3.5557 | 1.0000 | 0.9867 | 0.9109 | 0.8125 | Near the best quality-robustness trade-off |
+| 0.38 | 3.3374 | 1.0000 | 0.9938 | 0.9297 | 0.8281 | Below the 3.5 PESQ target |
+
+### Alpha 0.35 / 0.36 Edge Sweep
+
+Random 40 samples, seed 2026, attacks: none, noise20, noise10, noise5.
+
+| alpha | mask_floor | boundary_margin | PESQ none | none | noise20 | noise10 | noise5 | Objective | Selection Note |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0.35 | 0.20 | 0.005 | 3.5343 | 1.0000 | 0.9891 | 0.9141 | 0.8148 | 3.9426 | Valid quality |
+| 0.35 | 0.20 | 0.010 | 3.5363 | 1.0000 | 0.9883 | 0.9094 | 0.8289 | 3.9591 | Recommended DiffWave pilot config |
+| 0.35 | 0.25 | 0.005 | 3.5023 | 1.0000 | 0.9914 | 0.9078 | 0.8172 | 3.9434 | Barely above quality floor |
+| 0.35 | 0.25 | 0.010 | 3.5041 | 1.0000 | 0.9891 | 0.9102 | 0.8250 | 3.9547 | Barely above quality floor |
+| 0.36 | 0.20 | 0.005 | 3.4822 | 1.0000 | 0.9875 | 0.9109 | 0.8352 | 3.9245 | Below quality floor |
+| 0.36 | 0.20 | 0.010 | 3.4835 | 1.0000 | 0.9906 | 0.9094 | 0.8242 | 3.9132 | Below quality floor |
+| 0.36 | 0.25 | 0.005 | 3.4484 | 1.0000 | 0.9898 | 0.9164 | 0.8164 | 3.8185 | Below quality floor |
+| 0.36 | 0.25 | 0.010 | 3.4496 | 1.0000 | 0.9922 | 0.9148 | 0.8281 | 3.8404 | Below quality floor |
+
+Current DiffWave recommendation:
+
+- Use alpha 0.35, mask_floor 0.20, boundary_margin 0.01 as the DiffWave main RelMel configuration.
+- It keeps PESQ above 3.5 while reaching noise10 0.9225 and noise5 0.8308 on random 500 full attacks.
+- Run the matched MelShield-DiffWave baseline before making a final paper claim for the DiffWave vocoder.
+
 ## Reliable Pair Candidate Ablation
 
 ### Random 500 Ablation
