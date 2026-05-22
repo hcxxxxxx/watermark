@@ -143,10 +143,14 @@ def main() -> None:
                     "attack": attack_name,
                     "payload_bits": watermarker.payload_bits,
                     "bit_acc": detection["bit_acc"],
+                    "bit_acc_forced": detection.get("bit_acc_forced", ""),
                     "detected": detection["detected"],
+                    "decode_success": detection.get("decode_success", ""),
                     "verified": detection["verified"],
+                    "verified_forced": detection.get("verified_forced", ""),
                     "detection_score": detection.get("detection_score", ""),
                     "confidence": detection.get("confidence", ""),
+                    "forced_pattern_acc": detection.get("forced_pattern_acc", ""),
                     "pesq_gt": fmt(gt_metrics.pesq),
                     "stoi_gt": fmt(gt_metrics.stoi),
                     "pesq_bm": fmt(bm_metrics.pesq),
@@ -225,6 +229,7 @@ class WavMarkWatermarker:
         self.bit_acc_threshold = float(args.bit_acc_threshold)
         self.model = wavmark.load_model(args.wavmark_checkpoint or "default").to(self.device)
         self.model.eval()
+        self.pattern_bits = np.asarray(self.wavmark.wm_add_util.fix_pattern[:16], dtype=np.uint8)
         if self.payload_bits != 16:
             raise ValueError(
                 "This script uses WavMark's public high-level API, which exposes a 16-bit custom payload. "
@@ -244,14 +249,19 @@ class WavMarkWatermarker:
     def detect(self, audio: torch.Tensor, payload: np.ndarray) -> dict[str, Any]:
         signal = tensor_to_numpy(audio)
         decoded, info = self.wavmark.decode_watermark(self.model, signal, show_progress=False)
+        forced = self.forced_decode(signal, payload)
         if decoded is None:
             confidence = wavmark_confidence(info)
             return {
                 "bit_acc": 0.0,
+                "bit_acc_forced": forced["bit_acc"],
                 "detected": False,
+                "decode_success": False,
                 "verified": False,
+                "verified_forced": bool(forced["bit_acc"] >= self.bit_acc_threshold),
                 "detection_score": confidence if confidence is not None else "",
                 "confidence": confidence if confidence is not None else "",
+                "forced_pattern_acc": forced["pattern_acc"],
             }
         decoded_np = np.asarray(decoded, dtype=np.uint8).reshape(-1)[: payload.size]
         if decoded_np.size != payload.size:
@@ -260,10 +270,48 @@ class WavMarkWatermarker:
         confidence = wavmark_confidence(info)
         return {
             "bit_acc": acc,
+            "bit_acc_forced": forced["bit_acc"],
             "detected": bool(acc >= self.bit_acc_threshold),
+            "decode_success": True,
             "verified": bool(acc >= self.bit_acc_threshold),
+            "verified_forced": bool(forced["bit_acc"] >= self.bit_acc_threshold),
             "detection_score": confidence if confidence is not None else "",
             "confidence": confidence if confidence is not None else "",
+            "forced_pattern_acc": forced["pattern_acc"],
+        }
+
+    @torch.no_grad()
+    def forced_decode(self, signal: np.ndarray, payload: np.ndarray) -> dict[str, float]:
+        num_point = 16000
+        shift_step = 800
+        if signal.size < num_point:
+            signal = np.pad(signal, (0, num_point - signal.size))
+        max_start = max(0, signal.size - num_point)
+        starts = list(range(0, max_start + 1, shift_step))
+        if not starts:
+            starts = [0]
+        batch_size = 32
+        messages: list[np.ndarray] = []
+        for start in range(0, len(starts), batch_size):
+            batch_starts = starts[start : start + batch_size]
+            batch = np.stack([signal[p : p + num_point] for p in batch_starts]).astype(np.float32)
+            signal_tensor = torch.as_tensor(batch, device=self.device)
+            decoded = (self.model.decode(signal_tensor) >= 0.5).int().detach().cpu().numpy()
+            messages.append(decoded)
+        decoded_messages = np.concatenate(messages, axis=0).astype(np.uint8)
+        pattern_scores = np.mean(decoded_messages[:, : self.pattern_bits.size] == self.pattern_bits, axis=1)
+        encoded_chunk = num_point + int(num_point * 0.1)
+        expected_segments = max(1, int(signal.size / encoded_chunk))
+        topk = min(max(1, expected_segments), decoded_messages.shape[0])
+        top_indices = np.argsort(-pattern_scores)[:topk]
+        payload_votes = decoded_messages[top_indices, self.pattern_bits.size : self.pattern_bits.size + payload.size]
+        if payload_votes.shape[1] != payload.size:
+            forced_payload = np.zeros_like(payload)
+        else:
+            forced_payload = (payload_votes.mean(axis=0) >= 0.5).astype(np.uint8)
+        return {
+            "bit_acc": bit_accuracy(payload, forced_payload),
+            "pattern_acc": float(np.mean(pattern_scores[top_indices])),
         }
 
 
@@ -299,12 +347,26 @@ def write_outputs(output_dir: Path, rows: list[dict[str, Any]], args: argparse.N
         "bit_acc_threshold": args.bit_acc_threshold,
         "detection_threshold": args.detection_threshold,
         "mean_bit_acc": {attack: mean_key(attack, "bit_acc") for attack in sorted(grouped)},
+        "mean_bit_acc_forced": {
+            attack: mean_key(attack, "bit_acc_forced") for attack in sorted(grouped)
+        },
+        "mean_forced_pattern_acc": {
+            attack: mean_key(attack, "forced_pattern_acc") for attack in sorted(grouped)
+        },
+        "decode_rate": {
+            attack: float(np.mean([bool(row.get("decode_success")) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
         "detection_rate": {
             attack: float(np.mean([bool(row["detected"]) for row in attack_rows]))
             for attack, attack_rows in sorted(grouped.items())
         },
         "verification_rate": {
             attack: float(np.mean([bool(row["verified"]) for row in attack_rows]))
+            for attack, attack_rows in sorted(grouped.items())
+        },
+        "verification_rate_forced": {
+            attack: float(np.mean([bool(row.get("verified_forced")) for row in attack_rows]))
             for attack, attack_rows in sorted(grouped.items())
         },
         "mean_detection_score": {
