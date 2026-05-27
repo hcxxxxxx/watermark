@@ -51,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-ecc-interleave", action="store_true")
     parser.add_argument("--block-frames", type=int, default=None)
     parser.add_argument("--block-stride", type=int, default=None)
+    parser.add_argument("--min-block-frames", type=int, default=None)
     parser.add_argument("--bits-per-block", type=int, default=None)
     parser.add_argument("--pair-bins", type=int, default=None)
     parser.add_argument("--pair-candidates", type=int, default=None)
@@ -191,6 +192,7 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
         "payload_bits": info_bits if info_bits is not None else args.payload_bits,
         "block_frames": args.block_frames,
         "block_stride": args.block_stride,
+        "min_block_frames": getattr(args, "min_block_frames", None),
         "bits_per_block": args.bits_per_block,
         "pair_bins": args.pair_bins,
         "pair_candidates": args.pair_candidates,
