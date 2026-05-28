@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--alpha", type=float, default=None)
     parser.add_argument("--threshold", type=float, default=None)
+    parser.add_argument("--band", default=None)
     parser.add_argument("--payload-bits", type=int, default=None)
     parser.add_argument("--info-bits", type=int, default=None)
     parser.add_argument("--ecc-repeat", type=int, default=1)
@@ -189,6 +190,7 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
     overrides = {
         "alpha": args.alpha,
         "threshold": args.threshold,
+        "band": _parse_band(getattr(args, "band", None)),
         "payload_bits": info_bits if info_bits is not None else args.payload_bits,
         "block_frames": args.block_frames,
         "block_stride": args.block_stride,
@@ -207,6 +209,13 @@ def build_relmel_config(cfg: dict[str, Any], args: argparse.Namespace) -> RelMel
     if ecc_repeat > 1:
         data["payload_bits"] = int(data["payload_bits"]) * int(ecc_repeat)
     return RelMelConfig(**data)
+
+
+def _parse_band(value: str | None) -> tuple[int, int] | None:
+    if value is None:
+        return None
+    left, right = value.split(":", maxsplit=1)
+    return (int(left), int(right))
 
 
 def build_codec(args: argparse.Namespace) -> RepetitionCode:

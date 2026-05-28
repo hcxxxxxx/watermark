@@ -7,6 +7,7 @@
 - HiFi-GAN 条件下，RelMel 可靠候选对版本在干净 PESQ 约 3.51 时，显著优于本地复现的 MelShield。
 - DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5443 和 3.5492，RelMel 在 `noise20/noise10/noise5` 上分别达到 0.9914、0.9225、0.8308，MelShield 为 0.9658、0.8212、0.7210。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
+- reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平，验证率为 0.000 到 0.008。
 - MelShield 论文 reported 数据只能作为外部参考；最公平的主结论应优先基于同一代码、同一声码器、同一攻击、同一指标下的本地复现实验。
 
 ## 主对比表
@@ -180,6 +181,21 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | echo | 0.9915 | 1.000 | 1.000 | 1.8560 | 0.9960 | 1.000 | 1.000 | 1.6629 |
 
 结论：AudioSeal 和 WavMark 在压缩、缩放、重采样、滤波、回声等非噪声攻击下非常强，同时水印引入的干净音质损失也很小。但在加性噪声攻击下，尤其 `noise10/noise5`，二者作为波形后处理 watermark 的验证率明显低于 RelMel。WavMark 的 forced ACC 显示其 `noise10/noise5` 已接近随机水平，而高层接口 decode rate 在这两类攻击下为 0。与它们对比时需要强调 payload 长度不同：AudioSeal/WavMark 为 16 bit，RelMel/MelShield 主实验为 32 bit。
+
+## Reference 合理性与假阳性负控
+
+本实验用于回答 reference-based verification 是否会产生“拿任意 reference 也能通过”的假阳性问题。协议：HiFi-GAN，random500，攻击为 `none noise20`，阈值 `0.75`。正确水印音频作为正例；负例包括未加水印的 clean benchmark、错误密钥、错误 payload、错误 utterance reference，以及只替换 clean mel 的错误 reference。当前记录来自 `runs/relmel_reference_controls_hifigan_random500`。注意：该次运行使用的是 `band=20:56`，不是 HiFi-GAN 主配置的 `20:60`，因此建议作为负控证据保留，并在严格最终表格中复跑一版 `band=20:60`。
+
+| 条件 | none ACC | none VR | none confidence | noise20 ACC | noise20 VR | noise20 confidence | 解释 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| correct | 0.9999 | 1.000 | 0.001491 | 0.9935 | 1.000 | 0.000743 | 正确 reference、正确密钥、正确 payload |
+| clean_unmarked | 0.4994 | 0.002 | 0.000120 | 0.5015 | 0.000 | 0.000154 | 未加水印音频，基本随机 |
+| wrong_key | 0.4949 | 0.002 | 0.000240 | 0.4936 | 0.000 | 0.000207 | 错误密钥，基本随机 |
+| wrong_payload | 0.5016 | 0.000 | 0.001491 | 0.5011 | 0.000 | 0.000743 | 水印存在但声明 payload 错误 |
+| wrong_reference | 0.5052 | 0.006 | 0.000507 | 0.5014 | 0.002 | 0.000361 | 使用另一条语音的完整 reference |
+| wrong_reference_mel | 0.5229 | 0.008 | 0.000506 | 0.5134 | 0.002 | 0.000363 | 只替换 clean mel，保留当前 utterance id 和 payload |
+
+结论：正例在 `none/noise20` 下均稳定通过；负例的平均 bit accuracy 接近 0.5，验证率最高仅 0.8%。这说明 RelMel 的验证强依赖正确 reference、正确密钥和正确 payload，不是单纯靠阈值宽松造成的过度自信。`wrong_payload` 的 confidence 与正例相同但 bit accuracy 回到随机，说明 confidence 代表“存在某个水印方向的强信号”，不能单独作为归属判断，最终归属仍应以 payload bit accuracy/verification 为准。
 
 ## 关键消融实验
 

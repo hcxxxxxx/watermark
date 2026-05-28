@@ -54,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vocoder-command", default=None)
     parser.add_argument("--alpha", type=float, default=None)
     parser.add_argument("--threshold", type=float, default=None)
+    parser.add_argument("--band", default=None)
     parser.add_argument("--payload-bits", type=int, default=None)
     parser.add_argument("--info-bits", type=int, default=None)
     parser.add_argument("--ecc-repeat", type=int, default=1)
