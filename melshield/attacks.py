@@ -178,6 +178,10 @@ def ffmpeg_pitch(factor: float) -> AttackFn:
     return apply
 
 
+def ffmpeg_pitch_cents(cents: float) -> AttackFn:
+    return ffmpeg_pitch(2.0 ** (cents / 1200.0))
+
+
 def build_attacks(names: list[str]) -> dict[str, AttackFn]:
     registry: dict[str, AttackFn] = {
         "none": identity,
@@ -201,8 +205,16 @@ def build_attacks(names: list[str]) -> dict[str, AttackFn]:
         "mp3_64": ffmpeg_codec("mp3", "64k"),
         "aac": ffmpeg_codec("aac", "96k"),
         "aac_48": ffmpeg_codec("aac", "48k"),
+        "speed095": ffmpeg_filter("atempo=0.95"),
+        "speed097": ffmpeg_filter("atempo=0.97"),
         "speed090": ffmpeg_filter("atempo=0.90"),
+        "speed103": ffmpeg_filter("atempo=1.03"),
+        "speed105": ffmpeg_filter("atempo=1.05"),
         "speed110": ffmpeg_filter("atempo=1.10"),
+        "pitch_up25": ffmpeg_pitch_cents(25.0),
+        "pitch_down25": ffmpeg_pitch_cents(-25.0),
+        "pitch_up50": ffmpeg_pitch_cents(50.0),
+        "pitch_down50": ffmpeg_pitch_cents(-50.0),
         "pitch_up": ffmpeg_pitch(1.059463),
         "pitch_down": ffmpeg_pitch(0.943874),
     }

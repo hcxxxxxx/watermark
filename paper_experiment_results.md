@@ -7,7 +7,9 @@
 - HiFi-GAN 条件下，RelMel 可靠候选对版本在干净 PESQ 约 3.51 时，显著优于本地复现的 MelShield。
 - DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5443 和 3.5492，RelMel 在 `noise20/noise10/noise5` 上分别达到 0.9914、0.9225、0.8308，MelShield 为 0.9658、0.8212、0.7210。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
-- reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平，验证率为 0.000 到 0.008。
+- reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平，完整错误 reference 的验证率仅为 0.2% 到 0.4%。
+- reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 约 22KB/reference，仍能保持 `noise20=0.9941`、`noise10=0.9399`、`noise5=0.8574`，接近 float32 reference。
+- 局部片段实验显示，在已知裁剪位置的 reference-assisted 验证下，25% 音频片段仍达到约 0.989 到 0.991 bit accuracy，验证率为 1.000。
 - MelShield 论文 reported 数据只能作为外部参考；最公平的主结论应优先基于同一代码、同一声码器、同一攻击、同一指标下的本地复现实验。
 
 ## 主对比表
@@ -184,18 +186,74 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 
 ## Reference 合理性与假阳性负控
 
-本实验用于回答 reference-based verification 是否会产生“拿任意 reference 也能通过”的假阳性问题。协议：HiFi-GAN，random500，攻击为 `none noise20`，阈值 `0.75`。正确水印音频作为正例；负例包括未加水印的 clean benchmark、错误密钥、错误 payload、错误 utterance reference，以及只替换 clean mel 的错误 reference。当前记录来自 `runs/relmel_reference_controls_hifigan_random500`。注意：该次运行使用的是 `band=20:56`，不是 HiFi-GAN 主配置的 `20:60`，因此建议作为负控证据保留，并在严格最终表格中复跑一版 `band=20:60`。
+本实验用于回答 reference-based verification 是否会产生“拿任意 reference 也能通过”的假阳性问题。协议：HiFi-GAN，random500，`band=20:60`，攻击为 `none noise20`，阈值 `0.75`。正确水印音频作为正例；负例包括未加水印的 clean benchmark、错误密钥、错误 payload、错误 utterance reference，以及只替换 clean mel 的错误 reference。当前记录来自 `runs/relmel_reference_controls_hifigan_band2060_random500`。
 
 | 条件 | none ACC | none VR | none confidence | noise20 ACC | noise20 VR | noise20 confidence | 解释 |
 |---|---:|---:|---:|---:|---:|---:|---|
-| correct | 0.9999 | 1.000 | 0.001491 | 0.9935 | 1.000 | 0.000743 | 正确 reference、正确密钥、正确 payload |
-| clean_unmarked | 0.4994 | 0.002 | 0.000120 | 0.5015 | 0.000 | 0.000154 | 未加水印音频，基本随机 |
-| wrong_key | 0.4949 | 0.002 | 0.000240 | 0.4936 | 0.000 | 0.000207 | 错误密钥，基本随机 |
-| wrong_payload | 0.5016 | 0.000 | 0.001491 | 0.5011 | 0.000 | 0.000743 | 水印存在但声明 payload 错误 |
-| wrong_reference | 0.5052 | 0.006 | 0.000507 | 0.5014 | 0.002 | 0.000361 | 使用另一条语音的完整 reference |
-| wrong_reference_mel | 0.5229 | 0.008 | 0.000506 | 0.5134 | 0.002 | 0.000363 | 只替换 clean mel，保留当前 utterance id 和 payload |
+| correct | 0.9999 | 1.000 | 0.001379 | 0.9948 | 1.000 | 0.000690 | 正确 reference、正确密钥、正确 payload |
+| clean_unmarked | 0.4964 | 0.002 | 0.000105 | 0.4966 | 0.004 | 0.000140 | 未加水印音频，基本随机 |
+| wrong_key | 0.5046 | 0.000 | 0.000210 | 0.5011 | 0.002 | 0.000184 | 错误密钥，基本随机 |
+| wrong_payload | 0.5017 | 0.000 | 0.001379 | 0.5020 | 0.000 | 0.000690 | 水印存在但声明 payload 错误 |
+| wrong_reference | 0.4976 | 0.002 | 0.000462 | 0.5026 | 0.004 | 0.000327 | 使用另一条语音的完整 reference |
+| wrong_reference_mel | 0.5150 | 0.020 | 0.000463 | 0.5041 | 0.004 | 0.000327 | 只替换 clean mel，保留当前 utterance id 和 payload |
 
-结论：正例在 `none/noise20` 下均稳定通过；负例的平均 bit accuracy 接近 0.5，验证率最高仅 0.8%。这说明 RelMel 的验证强依赖正确 reference、正确密钥和正确 payload，不是单纯靠阈值宽松造成的过度自信。`wrong_payload` 的 confidence 与正例相同但 bit accuracy 回到随机，说明 confidence 代表“存在某个水印方向的强信号”，不能单独作为归属判断，最终归属仍应以 payload bit accuracy/verification 为准。
+结论：正例在 `none/noise20` 下均稳定通过；多数负例的平均 bit accuracy 接近 0.5，完整错误 reference 的验证率只有 0.2% 到 0.4%。`wrong_reference_mel` 的 `none` 验证率为 2.0%，略高于其他负控，因为该设置保留了当前 utterance id 和 payload，只替换 clean mel，属于半错误 reference；论文中应优先强调更符合实际误配场景的 `wrong_reference`。`wrong_payload` 的 confidence 与正例相同但 bit accuracy 回到随机，说明 confidence 代表“存在某个水印方向的强信号”，不能单独作为归属判断，最终归属仍应以 payload bit accuracy/verification 为准。
+
+## Reference 存储与压缩
+
+本实验用于评估 reference 保存成本。协议：HiFi-GAN，random500，`band=20:60`，攻击为 `none noise20 noise10 noise5`。`float32/float16/uint8/uint6/uint4` 表示保存完整 80-bin clean mel；`band_uint8` 表示只保存水印频带 `20:60` 的 8-bit clean mel。当前记录来自 `runs/relmel_reference_compression_hifigan_band2060_random500`。
+
+| reference 格式 | 平均大小 KB | none ACC/VR | noise20 ACC/VR | noise10 ACC/VR | noise5 ACC/VR | 说明 |
+|---|---:|---:|---:|---:|---:|---|
+| float32 | 176.72 | 0.9999 / 1.000 | 0.9948 / 1.000 | 0.9418 / 0.990 | 0.8593 / 0.918 | 未压缩基准 |
+| float16 | 88.36 | 0.9999 / 1.000 | 0.9948 / 1.000 | 0.9414 / 0.990 | 0.8588 / 0.918 | 几乎无损 |
+| uint8 | 44.18 | 0.9999 / 1.000 | 0.9939 / 1.000 | 0.9393 / 0.992 | 0.8570 / 0.926 | 完整 mel 8-bit |
+| uint6 | 33.14 | 0.9998 / 1.000 | 0.9918 / 1.000 | 0.9343 / 0.986 | 0.8506 / 0.914 | 轻微下降 |
+| uint4 | 22.09 | 0.9986 / 1.000 | 0.9839 / 1.000 | 0.9112 / 0.976 | 0.8244 / 0.846 | 明显压缩，鲁棒性下降 |
+| band_uint8 | 22.09 | 1.0000 / 1.000 | 0.9941 / 1.000 | 0.9399 / 0.992 | 0.8574 / 0.920 | 只存水印频带，推荐 |
+
+结论：RelMel 不需要保存完整 float32 mel reference。只保存 `20:60` 频带的 8-bit reference，平均约 22KB/utterance，存储成本约为 float32 全 mel 的 1/8，同时 `noise20/noise10/noise5` 与 float32 基准基本一致。这为 reference-based verification 的实际部署提供了更合理的存储口径。
+
+## 裁剪与局部片段验证
+
+本实验用于评估局部片段中是否仍包含足够水印证据。协议：HiFi-GAN，random500，`band=20:60`，无额外攻击；裁剪位置在验证时已知，因此这是 reference-assisted partial-clip verification，而不是盲搜索裁剪位置。当前记录来自 `runs/relmel_fragments_hifigan_band2060_random500`。
+
+| 片段 | 平均片段比例 | mean votes | ACC | VR | PESQ | STOI |
+|---|---:|---:|---:|---:|---:|---:|
+| full | 1.000 | 13.18 | 0.9999 | 1.000 | 3.5101 | 0.9685 |
+| start25 | 0.250 | 3.31 | 0.9911 | 1.000 | 3.5095 | 0.9546 |
+| middle25 | 0.250 | 3.30 | 0.9908 | 1.000 | 3.5632 | 0.9541 |
+| end25 | 0.250 | 3.24 | 0.9890 | 1.000 | 3.4943 | 0.9547 |
+| start50 | 0.500 | 6.63 | 0.9984 | 1.000 | 3.5127 | 0.9679 |
+| middle50 | 0.500 | 6.62 | 0.9986 | 1.000 | 3.5481 | 0.9698 |
+| end50 | 0.500 | 6.54 | 0.9987 | 1.000 | 3.5161 | 0.9692 |
+| middle75 | 0.750 | 9.93 | 0.9998 | 1.000 | 3.5256 | 0.9694 |
+
+结论：即使只保留 25% 音频片段，RelMel 仍保持约 0.989 到 0.991 bit accuracy，验证率为 1.000；50% 以上片段几乎接近完整音频结果。这说明块级重复嵌入让水印证据在时间维度上分布较均匀。该实验适合放入补充材料；如果写进主文，需要明确当前版本使用已知裁剪位置。
+
+## 现代攻击扩展评测
+
+本实验补充现代音频水印论文常见的更强或更多样攻击。协议：random500，`band=20:60`，主配置不变；HiFi-GAN 记录来自 `runs/relmel_hifigan_modern_attacks_random500`，DiffWave 记录来自 `runs/relmel_diffwave_modern_attacks_random500`。注意：`speed090/speed110` 改变时间尺度，`pitch_up/pitch_down` 同时涉及频率轴变化，均超出当前仅允许小范围平移对齐的检测假设；`noise0` 是 0 dB 极强加性噪声。
+
+| 攻击 | HiFi-GAN ACC/VR | HiFi-GAN PESQ | DiffWave ACC/VR | DiffWave PESQ | 说明 |
+|---|---:|---:|---:|---:|---|
+| none | 0.9999 / 1.000 | 3.5101 | 0.9998 / 1.000 | 3.5459 | 无攻击 |
+| mp3_64 | 0.9999 / 1.000 | 3.4705 | 0.9998 / 1.000 | 3.4883 | 64 kbps MP3 |
+| aac_48 | 0.9998 / 1.000 | 2.9301 | 0.9997 / 1.000 | 2.9286 | 48 kbps AAC |
+| rs8 | 0.9999 / 1.000 | 2.3599 | 0.9483 / 0.994 | 2.5121 | 重采样到 8 kHz |
+| rs24 | 0.9999 / 1.000 | 3.5101 | 0.9998 / 1.000 | 3.5460 | 重采样到 24 kHz |
+| lowpass2k | 0.9991 / 1.000 | 3.4663 | 0.9930 / 1.000 | 3.5735 | 2 kHz 低通 |
+| bandpass_wide | 0.9999 / 1.000 | 3.5045 | 0.9998 / 1.000 | 3.5454 | 100 Hz 到 7 kHz 带通 |
+| clip05 | 0.9999 / 1.000 | 3.4840 | 0.9998 / 1.000 | 3.5289 | 幅度裁剪到 ±0.5 |
+| quant8 | 0.9993 / 1.000 | 2.4019 | 0.9991 / 1.000 | 2.3432 | 8-bit 均匀量化 |
+| reverb | 0.9885 / 1.000 | 1.3004 | 0.9872 / 1.000 | 1.2564 | 更强回声/混响 |
+| noise0 | 0.7516 / 0.598 | 1.0262 | 0.7294 / 0.486 | 1.0237 | 0 dB 极强噪声 |
+| pitch_down | 0.7854 / 0.732 | 1.2358 | 0.6475 / 0.162 | 1.2216 | 降调约 1 个半音 |
+| pitch_up | 0.7824 / 0.724 | 1.2266 | 0.6481 / 0.160 | 1.2140 | 升调约 1 个半音 |
+| speed090 | 0.6632 / 0.260 | 1.2531 | 0.6510 / 0.186 | 1.2529 | 0.9 倍速，时间尺度改变 |
+| speed110 | 0.6867 / 0.320 | 1.8922 | 0.6678 / 0.250 | 1.8895 | 1.1 倍速，时间尺度改变 |
+
+结论：RelMel 对低码率压缩、滤波、幅度裁剪、8-bit 量化和较强混响在两种声码器下都保持较高鲁棒性，其中多数攻击下验证率为 1.000。DiffWave 下 `rs8` 有一定下降，但仍保持 0.9483 ACC 和 0.994 VR。主要薄弱点在两个声码器上保持一致：时间尺度改变和 pitch shift 会破坏当前以 reference frame alignment 为基础的小范围平移对齐假设。0 dB 噪声下仍有约 0.73 到 0.75 bit accuracy，但验证率下降到 0.486 到 0.598，说明极强噪声是另一个边界条件。
 
 ## 关键消融实验
 
