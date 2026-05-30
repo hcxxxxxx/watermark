@@ -7,9 +7,9 @@
 - HiFi-GAN 条件下，RelMel 可靠候选对版本在干净 PESQ 约 3.51 时，显著优于本地复现的 MelShield。
 - DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5443 和 3.5492，RelMel 在 `noise20/noise10/noise5` 上分别达到 0.9914、0.9225、0.8308，MelShield 为 0.9658、0.8212、0.7210。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
-- reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平，完整错误 reference 的验证率仅为 0.2% 到 0.4%。
+- reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平。random2000 单攻击扩展实验中，错误密钥、错误 payload、错误 reference 的验证率分别为 0.15%、0.40%、0.35%。
 - reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 约 22KB/reference，仍能保持 `noise20=0.9941`、`noise10=0.9399`、`noise5=0.8574`，接近 float32 reference。
-- 局部片段实验显示，在已知裁剪位置的 reference-assisted 验证下，25% 音频片段仍达到约 0.989 到 0.991 bit accuracy，验证率为 1.000。
+- 局部片段实验显示，在盲搜索裁剪位置的 reference-assisted 验证下，25% 音频片段仍达到约 0.985 到 0.991 bit accuracy，验证率为 0.998 到 1.000；搜索到的起点误差中位数约为 0 到 1 个 mel frame。
 - MelShield 论文 reported 数据只能作为外部参考；最公平的主结论应优先基于同一代码、同一声码器、同一攻击、同一指标下的本地复现实验。
 
 ## 主对比表
@@ -199,6 +199,20 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 
 结论：正例在 `none/noise20` 下均稳定通过；多数负例的平均 bit accuracy 接近 0.5，完整错误 reference 的验证率只有 0.2% 到 0.4%。`wrong_reference_mel` 的 `none` 验证率为 2.0%，略高于其他负控，因为该设置保留了当前 utterance id 和 payload，只替换 clean mel，属于半错误 reference；论文中应优先强调更符合实际误配场景的 `wrong_reference`。`wrong_payload` 的 confidence 与正例相同但 bit accuracy 回到随机，说明 confidence 代表“存在某个水印方向的强信号”，不能单独作为归属判断，最终归属仍应以 payload bit accuracy/verification 为准。
 
+### Random2000 假阳性扩展
+
+为获得更稳定的 false positive estimate（假阳性估计），进一步在 HiFi-GAN、`band=20:60`、无攻击条件下跑 random2000。当前记录来自 `runs/relmel_reference_controls_hifigan_band2060_random2000`。
+
+| 条件 | ACC | VR | confidence | PESQ | STOI | 解释 |
+|---|---:|---:|---:|---:|---:|---|
+| correct | 0.9999 | 1.0000 | 0.001373 | 3.5141 | 0.9685 | 正确 reference、正确密钥、正确 payload |
+| clean_unmarked | 0.5008 | 0.0040 | 0.000106 | 4.6439 | 1.0000 | 未加水印音频 |
+| wrong_key | 0.5030 | 0.0015 | 0.000210 | 3.5141 | 0.9685 | 错误密钥 |
+| wrong_payload | 0.5000 | 0.0040 | 0.001373 | 3.5141 | 0.9685 | 水印存在但声明 payload 错误 |
+| wrong_reference | 0.4991 | 0.0035 | 0.000460 | 3.5141 | 0.9685 | 使用另一条语音的完整 reference |
+
+结论：random2000 扩展实验进一步确认，错误密钥、错误 payload、错误 reference 的平均 ACC 均约为随机水平，VR 分别为 0.15%、0.40%、0.35%。`wrong_payload` 的 confidence 仍与正例相同，但 ACC 和 VR 回到负例水平，说明论文中应明确最终验证依据是 payload match，而不是单独 confidence。该结果可以作为主文中 reference-based verification 合理性的核心证据。
+
 ## Reference 存储与压缩
 
 本实验用于评估 reference 保存成本。协议：HiFi-GAN，random500，`band=20:60`，攻击为 `none noise20 noise10 noise5`。`float32/float16/uint8/uint6/uint4` 表示保存完整 80-bin clean mel；`band_uint8` 表示只保存水印频带 `20:60` 的 8-bit clean mel。当前记录来自 `runs/relmel_reference_compression_hifigan_band2060_random500`。
@@ -216,7 +230,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 
 ## 裁剪与局部片段验证
 
-本实验用于评估局部片段中是否仍包含足够水印证据。协议：HiFi-GAN，random500，`band=20:60`，无额外攻击；裁剪位置在验证时已知，因此这是 reference-assisted partial-clip verification，而不是盲搜索裁剪位置。当前记录来自 `runs/relmel_fragments_hifigan_band2060_random500`。
+本实验用于评估局部片段中是否仍包含足够水印证据。协议：HiFi-GAN，random500，`band=20:60`，无额外攻击。先记录已知裁剪位置的 reference-assisted partial-clip verification，当前记录来自 `runs/relmel_fragments_hifigan_band2060_random500`。
 
 | 片段 | 平均片段比例 | mean votes | ACC | VR | PESQ | STOI |
 |---|---:|---:|---:|---:|---:|---:|
@@ -229,7 +243,22 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | end50 | 0.500 | 6.54 | 0.9987 | 1.000 | 3.5161 | 0.9692 |
 | middle75 | 0.750 | 9.93 | 0.9998 | 1.000 | 3.5256 | 0.9694 |
 
-结论：即使只保留 25% 音频片段，RelMel 仍保持约 0.989 到 0.991 bit accuracy，验证率为 1.000；50% 以上片段几乎接近完整音频结果。这说明块级重复嵌入让水印证据在时间维度上分布较均匀。该实验适合放入补充材料；如果写进主文，需要明确当前版本使用已知裁剪位置。
+结论：即使只保留 25% 音频片段，RelMel 仍保持约 0.989 到 0.991 bit accuracy，验证率为 1.000；50% 以上片段几乎接近完整音频结果。这说明块级重复嵌入让水印证据在时间维度上分布较均匀。
+
+### 盲搜索局部片段验证
+
+为避免“已知裁剪位置”假设过强，进一步评估 blind fragment verification（盲片段验证）：给定一个疑似裁剪片段，不直接告知其在原 reference 中的起点，而是以 `search_step_frames=4` 在 reference 上滑窗搜索，选择 signed payload score 最高的窗口进行验证。当前记录来自 `runs/relmel_blind_fragments_hifigan_band2060_random500`。
+
+| 片段 | 平均片段比例 | 搜索窗口数 | 起点误差均值/中位数 frame | mean votes | ACC | VR | PESQ | STOI |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| start25 | 0.250 | 107.2 | 0.00 / 0.0 | 3.33 | 0.9908 | 1.000 | 3.5095 | 0.9546 |
+| middle25 | 0.250 | 107.2 | 1.15 / 1.0 | 3.35 | 0.9854 | 0.998 | 3.5632 | 0.9541 |
+| end25 | 0.250 | 107.2 | 1.14 / 1.0 | 3.26 | 0.9884 | 0.998 | 3.4943 | 0.9547 |
+| start50 | 0.500 | 71.7 | 0.00 / 0.0 | 6.64 | 0.9984 | 1.000 | 3.5127 | 0.9679 |
+| middle50 | 0.500 | 71.7 | 1.04 / 1.0 | 6.66 | 0.9973 | 1.000 | 3.5481 | 0.9698 |
+| end50 | 0.500 | 71.7 | 1.00 / 1.0 | 6.57 | 0.9989 | 1.000 | 3.5161 | 0.9692 |
+
+结论：在不提供裁剪起点的盲搜索设置下，25% 片段仍保持 0.985 到 0.991 ACC，VR 为 0.998 到 1.000；50% 片段保持 0.997 以上 ACC 和 1.000 VR。搜索定位误差很小，非起始片段的起点误差中位数约为 1 个 mel frame。这组结果比已知位置片段实验更适合作为主文证据，说明 RelMel 的 reference-assisted verification 可以处理局部片段和未知裁剪位置。
 
 ## 现代攻击扩展评测
 
