@@ -55,7 +55,7 @@ secret key（密钥）不应作为普通 reference 文件的一部分明文存�
 - TTS 服务方通常本来就保存请求日志、speaker id、模型版本、生成配置等记录。
 - 在许多平台场景中，验证者不是公众，而是模型或服务提供方。
 - 保存完整 waveform（波形音频）成本较大，但保存压缩后的 mel reference 成本可控。
-- 实验显示，只保存水印频带 `20:60` 的 8-bit clean mel，平均约 22KB/reference，已经接近 float32 reference 的验证效果。
+- 实验显示，只保存水印频带 `20:60` 的 8-bit clean mel，平均约 21.87KB/reference，已经接近 float32 reference 的验证效果。
 
 因此，reference 不是本文偷偷依赖的“作弊信息”，而是本文主动定义的应用场景和系统假设。
 
@@ -317,23 +317,24 @@ Reference-assisted verification 最容易被质疑的问题是：是不是需要
 
 实验显示，不需要保存完整 float32 mel。
 
-Reference compression（参考压缩）实验比较了几种格式：
+Reference compression（参考压缩）实验在 random2000 规模上比较了三种代表性格式：
 
-- float32：完整 80-bin mel，约 176.72KB/reference。
-- float16：约 88.36KB/reference。
-- uint8：完整 mel 8-bit，约 44.18KB/reference。
-- uint6：约 33.14KB/reference。
-- uint4：约 22.09KB/reference，但鲁棒性下降明显。
-- band_uint8：只保存水印频带 `20:60` 的 8-bit mel，约 22.09KB/reference。
+- float32：完整 80-bin mel，约 174.96KB/reference。
+- band_uint8：只保存水印频带 `20:60` 的 8-bit mel，约 21.87KB/reference。
+- uint4：保存完整 80-bin mel，但量化到 4-bit，约 21.87KB/reference。
 
 其中最推荐的是 `band_uint8`，因为它只保存真正用于水印验证的频带，存储很小，但鲁棒性接近 float32：
 
-- `none`：1.0000 / 1.000 VR
-- `noise20`：0.9941 / 1.000 VR
-- `noise10`：0.9399 / 0.992 VR
-- `noise5`：0.8574 / 0.920 VR
+- `none`：0.9999 / 1.000 VR
+- `noise20`：0.9939 / 1.000 VR
+- `noise10`：0.9394 / 0.9925 VR
+- `noise5`：0.8584 / 0.9245 VR
 
-这说明 reference-based verification 在平台部署中是可以讲得通的。对平台方来说，22KB/utterance 的参考信息并不离谱，尤其相比保存完整 wav 或复杂日志而言。
+对应的 float32 reference 在 `noise20/noise10/noise5` 上是 0.9943 / 1.000 VR、0.9407 / 0.9935 VR、0.8595 / 0.9305 VR。差距非常小。
+
+同样约 21.87KB/reference 的完整 mel `uint4` 在 `noise20/noise10/noise5` 上只有 0.9820 / 1.000 VR、0.9048 / 0.975 VR、0.8183 / 0.8415 VR。这说明对 RAWMER 来说，保留水印频带的相对精度比粗糙保存全频带更重要。
+
+这说明 reference-based verification 在平台部署中是可以讲得通的。对平台方来说，约 21.87KB/utterance 的参考信息并不离谱，尤其相比保存完整 wav 或复杂日志而言。
 
 ## 13. 与 MelShield 的核心区别
 
@@ -717,7 +718,7 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 2. RAWMER 全攻击表，至少放 HiFi-GAN/DiffWave 摘要。
 3. AudioSeal/WavMark waveform baseline 摘要。
 4. Reference false positive random2000 表。
-5. Reference compression 表，突出 22KB band_uint8。
+5. Reference compression 表，突出 21.87KB band_uint8。
 6. Blind fragment verification 表。
 7. Speed/pitch 边界小表或图。
 
@@ -758,4 +759,4 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 如果只允许用一段话介绍本工作，可以写：
 
-> RAWMER is a reference-assisted mel-domain watermarking method for neural speech provenance verification. Instead of encoding payload bits as absolute perturbation patterns, it embeds them as relative energy relations between reliable positive and negative mel-bin groups across repeated time blocks. With a clean mel reference retained by the service provider, RAWMER verifies whether a suspect audio clip matches a claimed payload, key, and generation record. Experiments on LJSpeech with HiFi-GAN and DiffWave show that RAWMER substantially improves additive-noise robustness over quality-matched MelShield, remains competitive under common signal-processing attacks, produces low false positives under wrong-key/payload/reference controls, supports compressed references of about 22KB per utterance, and can verify partial clips via blind reference search. Its current main limitation is strong time/frequency synchronization distortion such as large speed changes and pitch shifts.
+> RAWMER is a reference-assisted mel-domain watermarking method for neural speech provenance verification. Instead of encoding payload bits as absolute perturbation patterns, it embeds them as relative energy relations between reliable positive and negative mel-bin groups across repeated time blocks. With a clean mel reference retained by the service provider, RAWMER verifies whether a suspect audio clip matches a claimed payload, key, and generation record. Experiments on LJSpeech with HiFi-GAN and DiffWave show that RAWMER substantially improves additive-noise robustness over quality-matched MelShield, remains competitive under common signal-processing attacks, produces low false positives under wrong-key/payload/reference controls, supports compressed references of about 21.87KB per utterance, and can verify partial clips via blind reference search. Its current main limitation is strong time/frequency synchronization distortion such as large speed changes and pitch shifts.

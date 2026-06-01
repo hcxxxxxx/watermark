@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reference-variants",
         nargs="+",
-        default=["float32", "float16", "uint8", "uint6", "uint4", "band_uint8"],
+        default=["float32", "float16", "uint8", "uint6", "uint4", "uint2", "band_uint8", "band_uint4", "band_uint2"],
     )
     parser.add_argument("--vocoder", default=None, choices=["mel", "griffinlim", "hifigan", "command"])
     parser.add_argument("--vocoder-checkpoint", default=None)
@@ -184,6 +184,8 @@ def compress_reference(reference: Any, name: str) -> tuple[Any, int]:
 
 
 def quantize_unit(value: np.ndarray, bits: int) -> np.ndarray:
+    if bits < 1:
+        raise ValueError(f"Quantization bits must be >= 1, got {bits}")
     levels = float((1 << bits) - 1)
     return (np.round(np.clip(value, 0.0, 1.0) * levels) / levels).astype(np.float32)
 

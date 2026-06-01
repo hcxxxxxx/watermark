@@ -332,12 +332,14 @@ reference all drop to chance accuracy (ACC ~ 0.50) with VR of 0.40%, 0.15%,
 confidence value equal to the positive case yet fails verification, confirming
 that attribution must rest on payload match rather than signal strength alone.
 
-Reference compression. Storing the full float32 mel costs 176.72 KB per
+Reference compression. Storing the full float32 mel costs 174.96 KB per
 utterance. Quantizing only the watermark band (bins 20-60) to 8 bits reduces
-this to about 22 KB -- one eighth of the cost -- while preserving robustness:
-ACC/VR of 0.9941/1.000, 0.9399/0.992, and 0.8574/0.920 at 20/10/5 dB,
-essentially matching the float32 reference. This makes per-utterance reference
-storage realistic for a service provider.
+this to 21.87 KB -- one eighth of the cost -- while preserving robustness:
+ACC/VR of 0.9939/1.000, 0.9394/0.993, and 0.8584/0.925 at 20/10/5 dB,
+essentially matching the float32 reference. A same-size full-mel 4-bit reference
+drops more strongly, showing that preserving precision in the watermark band is
+preferable to uniformly quantizing all mel bins. This makes per-utterance
+reference storage realistic for a service provider.
 
 Blind partial-clip verification. To avoid assuming a known crop position, the
 verifier slides each fragment over the reference (search step 4 frames) and
@@ -354,9 +356,10 @@ support short, unaligned clips.
       wrong key        0.5030 / 0.0015
       wrong payload    0.5000 / 0.0040
       wrong reference  0.4991 / 0.0035
-  (b) Reference compression, 500 utterances (size; ACC/VR at noise5).
-      float32          176.72 KB   0.8593 / 0.918
-      band_uint8        22.09 KB   0.8574 / 0.920
+  (b) Reference compression, 2000 utterances (size; ACC/VR at noise5).
+      float32          174.96 KB   0.8595 / 0.9305
+      band_uint8        21.87 KB   0.8584 / 0.9245
+      uint4             21.87 KB   0.8183 / 0.8415
   (c) Blind fragment verification, 500 utterances (ACC / VR).
       25% clip         0.985-0.991 / 0.998-1.000
       50% clip         >= 0.997    / 1.000

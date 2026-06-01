@@ -8,7 +8,7 @@
 - DiffWave 条件下，RAWMER 当前主配置在 random2000、干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5419 和 3.5475，RAWMER 在 `noise20/noise10/noise5` 上分别达到 0.9898、0.9194、0.8308，MelShield 为 0.9661、0.8180、0.7173。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
 - reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平。random2000 单攻击扩展实验中，错误密钥、错误 payload、错误 reference 的验证率分别为 0.15%、0.40%、0.35%。
-- reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 约 22KB/reference，仍能保持 `noise20=0.9941`、`noise10=0.9399`、`noise5=0.8574`，接近 float32 reference。
+- reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 平均约 21.87KB/reference，仍能保持 `noise20=0.9939`、`noise10=0.9394`、`noise5=0.8584`，接近 float32 reference 的 `0.9943/0.9407/0.8595`。
 - 局部片段实验显示，在盲搜索裁剪位置的 reference-assisted 验证下，25% 音频片段仍达到约 0.985 到 0.991 bit accuracy，验证率为 0.998 到 1.000；搜索到的起点误差中位数约为 0 到 1 个 mel frame。
 - MelShield 论文 reported 数据只能作为外部参考；最公平的主结论应优先基于同一代码、同一声码器、同一攻击、同一指标下的本地复现实验。
 
@@ -232,18 +232,15 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 
 ## Reference 存储与压缩
 
-本实验用于评估 reference 保存成本。协议：HiFi-GAN，random500，`band=20:60`，攻击为 `none noise20 noise10 noise5`。`float32/float16/uint8/uint6/uint4` 表示保存完整 80-bin clean mel；`band_uint8` 表示只保存水印频带 `20:60` 的 8-bit clean mel。当前记录来自 `runs/relmel_reference_compression_hifigan_band2060_random500`。
+本实验用于评估 reference 保存成本。协议：HiFi-GAN，random2000，`band=20:60`，攻击为 `none noise20 noise10 noise5`。`float32` 表示保存完整 80-bin clean mel；`uint4` 表示保存完整 80-bin clean mel 但量化到 4-bit；`band_uint8` 表示只保存水印频带 `20:60` 的 8-bit clean mel。当前记录来自 `runs/relmel_reference_compression_hifigan_band2060_random2000`。
 
 | reference 格式 | 平均大小 KB | none ACC/VR | noise20 ACC/VR | noise10 ACC/VR | noise5 ACC/VR | 说明 |
 |---|---:|---:|---:|---:|---:|---|
-| float32 | 176.72 | 0.9999 / 1.000 | 0.9948 / 1.000 | 0.9418 / 0.990 | 0.8593 / 0.918 | 未压缩基准 |
-| float16 | 88.36 | 0.9999 / 1.000 | 0.9948 / 1.000 | 0.9414 / 0.990 | 0.8588 / 0.918 | 几乎无损 |
-| uint8 | 44.18 | 0.9999 / 1.000 | 0.9939 / 1.000 | 0.9393 / 0.992 | 0.8570 / 0.926 | 完整 mel 8-bit |
-| uint6 | 33.14 | 0.9998 / 1.000 | 0.9918 / 1.000 | 0.9343 / 0.986 | 0.8506 / 0.914 | 轻微下降 |
-| uint4 | 22.09 | 0.9986 / 1.000 | 0.9839 / 1.000 | 0.9112 / 0.976 | 0.8244 / 0.846 | 明显压缩，鲁棒性下降 |
-| band_uint8 | 22.09 | 1.0000 / 1.000 | 0.9941 / 1.000 | 0.9399 / 0.992 | 0.8574 / 0.920 | 只存水印频带，推荐 |
+| float32 | 174.96 | 0.9999 / 1.000 | 0.9943 / 1.000 | 0.9407 / 0.994 | 0.8595 / 0.931 | 未压缩基准 |
+| band_uint8 | 21.87 | 0.9999 / 1.000 | 0.9939 / 1.000 | 0.9394 / 0.993 | 0.8584 / 0.925 | 只存水印频带，推荐 |
+| uint4 | 21.87 | 0.9986 / 1.000 | 0.9820 / 1.000 | 0.9048 / 0.975 | 0.8183 / 0.842 | 同等大小但完整 mel 低精度，下降明显 |
 
-结论：RAWMER 不需要保存完整 float32 mel reference。只保存 `20:60` 频带的 8-bit reference，平均约 22KB/utterance，存储成本约为 float32 全 mel 的 1/8，同时 `noise20/noise10/noise5` 与 float32 基准基本一致。这为 reference-based verification 的实际部署提供了更合理的存储口径。
+结论：RAWMER 不需要保存完整 float32 mel reference。只保存 `20:60` 频带的 8-bit reference，平均约 21.87KB/utterance，存储成本约为 float32 全 mel 的 1/8；与 float32 相比，`noise20/noise10/noise5` ACC 仅下降约 `0.0005/0.0013/0.0011`。同等大小的完整 mel `uint4` 下降更明显，说明保留相关频带的精度比压低全频带精度更合适。
 
 ## 裁剪与局部片段验证
 
