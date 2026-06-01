@@ -34,78 +34,64 @@ time/frequency desynchronization such as large speed or pitch changes.
 ------------------------------------------------------------------
 I. INTRODUCTION
 ------------------------------------------------------------------
-Modern text-to-speech (TTS), voice conversion, and voice cloning systems now
-synthesize speech that is difficult to distinguish from genuine recordings.
-This realism enables fraud, impersonation, and misinformation, and motivates
-mechanisms that let a provider establish the provenance of audio attributed to
-its service [REF: synthetic-speech-risk]. Plain metadata is easily stripped and
-cannot serve as reliable evidence of origin. Audio watermarking, which embeds an
-imperceptible payload that survives later processing, has therefore become a
-central tool for provenance attribution and forensic auditing of generated
-speech [REF: audioseal, wavmark].
+Modern text-to-speech (TTS) and voice cloning systems synthesize speech that is
+difficult to distinguish from genuine recordings, raising the risk of fraud,
+impersonation, and misinformation and motivating mechanisms that trace audio
+back to its source [REF: synthetic-speech-risk]. Audio watermarking, which
+embeds an imperceptible payload that survives later processing, has become a
+central tool for such provenance attribution [REF: audioseal, wavmark].
 
-Much of the watermarking literature pursues blind detection: given only a
-suspect clip, a detector decides whether a watermark is present and recovers its
-payload without any side information. Blind detection is general and valuable,
-but it is also demanding, and detector-based recovery tends to degrade sharply
-under strong additive noise or aggressive compression. We instead study a
-complementary and practically common setting, reference-assisted verification.
-A TTS service already logs request information such as utterance identifiers,
-speaker and model versions, and generation configurations; it can additionally
-retain a compact reference of the clean mel spectrogram produced at generation
-time. Given a suspect clip, the provider then asks a focused question: does this
-audio originate from a specific generation record and carry the claimed payload?
-Here the verifier is the service itself rather than an anonymous third party,
-which makes the retained reference a deliberate system assumption rather than
-hidden side information. This setting fits provenance verification, forensic
-attribution, and audit, where false attribution must be tightly controlled.
+Most TTS systems map text to an intermediate mel spectrogram and then to a
+waveform through a vocoder such as HiFi-GAN [REF: hifigan] or DiffWave
+[REF: diffwave]. Because the mel spectrogram is a shared, model-agnostic
+interface across these pipelines, recent work has moved keyed, in-generation
+watermarking from the waveform into the mel domain: MelShield [REF: melshield]
+treats the intermediate mel as the host signal and embeds a keyed payload via
+low-energy spread-spectrum perturbations before vocoding, so that a provider who
+retains the clean reference mel can later verify ownership without retraining the
+vocoder. This mel-domain, reference-assisted design reports strong robustness
+under common signal-processing distortions -- near-perfect decoding under MP3 and
+AAC compression and over 95% accuracy at 20 dB additive noise -- while preserving
+perceptual quality. We adopt the same setting: at generation time the provider
+stores a compact clean-mel reference, and given a suspect clip it checks whether
+the clip matches a claimed payload, key, and record.
 
-The mel spectrogram is a natural place to watermark in this setting. In a
-typical neural pipeline, text is mapped to a mel spectrogram by an acoustic
-model and then to a waveform by a vocoder such as HiFi-GAN [REF: hifigan] or
-DiffWave [REF: diffwave]. Embedding in the mel domain places the watermark
-before the vocoder, aligns perturbations with a perceptually motivated frequency
-scale, and lets the watermark propagate to the waveform through different
-vocoders. It also pairs naturally with reference-assisted verification: if the
-provider stores the clean mel, a suspect clip can be re-analyzed and compared
-against the reference to form a residual from which the payload is recovered.
-MelShield [REF: melshield] demonstrates that mel-domain, reference-assisted
-watermarking is feasible. However, it encodes each bit as an absolute
-perturbation pattern and detects it by correlating the residual with a
-key-driven pattern. Absolute residuals are sensitive to overall gain, frequency
-shaping, and vocoder reconstruction error, and in practice MelShield loses
-substantial bit accuracy under strong additive noise.
+Our point of departure is the encoding mechanism. MelShield, like prior
+mel-domain schemes, represents each bit as an absolute perturbation pattern and
+detects it by correlating the reference residual with the keyed pattern. Such
+absolute residuals are sensitive to overall gain, frequency shaping, and vocoder
+reconstruction error, and their separability degrades markedly under strong
+distortion: at lower signal-to-noise ratios the embedded pattern is buried and
+bit accuracy falls toward chance. This fragility under strong additive noise,
+rather than under common compression or filtering, is the problem we target.
 
 Our central observation is that, within a short time block, the relative energy
 relation between two groups of mel bins is more stable than the absolute residual
-of any single bin: many distortions, such as gain changes, mild filtering, and
-local reconstruction bias, act in common on a local mel region and largely
-cancel in a differential measurement. We propose RAWMER, which encodes each
-payload bit as the sign of an energy difference between a positive and a negative
-group of mel bins, repeated across time blocks. Detection compares the residual
-energy of the two groups rather than reading any single bin, and a
-reliability-aware selection uses the clean reference to choose bin pairs that are
-boundary-safe, energy-stable, and balanced between the two groups.
+of any single bin: gain changes, mild filtering, and local reconstruction bias
+act in common on a local region and largely cancel in a differential measurement.
+We propose RAWMER, which encodes each payload bit as the sign of an energy
+difference between a positive and a negative group of mel bins, repeated across
+time blocks, and a reliability-aware selection that uses the clean reference to
+choose boundary-safe, energy-stable, and balanced bin pairs.
 
-We make the following contributions:
+We make three contributions:
 
-(1) Relative mel-energy watermarking. We formulate speech watermarking as
-block-wise relative energy relations between mel-bin groups rather than absolute
-perturbation patterns, yielding a differential detection score that is robust to
+(1) Relative mel-energy watermarking. We formulate the payload as block-wise
+relative energy relations between mel-bin groups rather than absolute
+perturbation patterns, yielding a differential detection score robust to
 common-mode distortion.
 
-(2) Reliability-aware pair selection. We use the clean mel reference to select
-boundary-safe, energy-stable, and balanced positive/negative bin pairs from
-multiple candidates, which we show is the main source of the robustness gain
-under strong additive noise.
+(2) Reliability-aware pair selection. We use the clean reference to pick
+boundary-safe, energy-stable, and balanced positive/negative pairs from multiple
+candidates, which we show is the main source of robustness under strong additive
+noise.
 
-(3) A systematic study of the reference-assisted setting. Across HiFi-GAN and
-DiffWave, RAWMER improves additive-noise robustness over a quality-matched
-MelShield re-implementation, while negative controls, reference compression to
-about 22 KB per utterance, and blind partial-clip verification show that the
-setting is sound and practical. We also report a candid comparison with
-waveform-domain baselines (AudioSeal, WavMark) and disclose the main
-limitation, strong time/frequency desynchronization.
+(3) A systematic study of the setting. Across HiFi-GAN and DiffWave, RAWMER
+improves additive-noise robustness over a quality-matched MelShield
+re-implementation, while negative controls, references compressed to about 22 KB
+per utterance, and blind partial-clip verification show the setting is sound and
+practical. We also report a candid comparison with waveform-domain baselines and
+disclose the main limitation, strong time/frequency desynchronization.
 
 
 ------------------------------------------------------------------
@@ -433,16 +419,14 @@ pitch-aware matching is our primary direction for future work.
 ------------------------------------------------------------------
 V. REFERENCES
 ------------------------------------------------------------------
-NOTE: [1] MelShield could not be verified online (arxiv.org was unreachable in
-this environment). Please complete the author list / venue before submission.
-The bracket tags used in the body map to the numbers below:
+NOTE: bracket tags used in the body map to the numbers below:
   [REF: synthetic-speech-risk] -> [11]/[12]   [REF: audioseal] -> [3]
   [REF: wavmark] -> [4]   [REF: hifigan] -> [5]   [REF: diffwave] -> [6]
-  [REF: melshield] -> [1]
+  [REF: melshield] -> [1]   ([16],[20],[21] are unverified -- see chat notes)
 
-[1]  [Authors TBD], "MelShield: Robust Mel-Domain Audio Watermarking for
-     Provenance Attribution of AI-Generated Synthesized Speech," arXiv preprint
-     arXiv:2605.01515, 2026.
+[1]  Y. Jin, Q. Li, L. Liu, and J. Ni, "MelShield: Robust mel-domain audio
+     watermarking for provenance attribution of AI-generated synthesized
+     speech," arXiv preprint arXiv:2605.01515, 2026.
 
 [2]  J. Zhou, J. Yi, T. Wang, J. Tao, Y. Bai, C. Y. Zhang, Y. Ren, and Z. Wen,
      "TraceableSpeech: Towards proactively traceable text-to-speech with
