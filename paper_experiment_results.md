@@ -1,11 +1,11 @@
-# RelMel 论文实验结果汇总
+# RAWMER 论文实验结果汇总
 
 本文档只保留当前可以用于论文主文或补充材料的结果。默认数据集为 LJSpeech，随机抽样种子为 2026。表中的 `none` 表示无攻击条件下的比特准确率，`PESQ` 和 `STOI` 默认使用水印或攻击后音频相对无水印 benchmark 音频的客观音质指标。
 
 ## 结论速览
 
-- HiFi-GAN 条件下，RelMel 可靠候选对版本在干净 PESQ 约 3.51 时，显著优于本地复现的 MelShield。
-- DiffWave 条件下，RelMel 当前主配置在干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5443 和 3.5492，RelMel 在 `noise20/noise10/noise5` 上分别达到 0.9914、0.9225、0.8308，MelShield 为 0.9658、0.8212、0.7210。
+- HiFi-GAN 条件下，RAWMER 可靠候选对版本在 random2000、干净 PESQ 约 3.51 时，显著优于质量匹配的本地复现 MelShield。RAWMER 在 `noise20/noise10/noise5` 上分别达到 0.9942、0.9408、0.8587，MelShield 为 0.9028、0.7129、0.6328。
+- DiffWave 条件下，RAWMER 当前主配置在 random2000、干净 PESQ 约 3.54 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5419 和 3.5475，RAWMER 在 `noise20/noise10/noise5` 上分别达到 0.9898、0.9194、0.8308，MelShield 为 0.9661、0.8180、0.7173。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
 - reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平。random2000 单攻击扩展实验中，错误密钥、错误 payload、错误 reference 的验证率分别为 0.15%、0.40%、0.35%。
 - reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 约 22KB/reference，仍能保持 `noise20=0.9941`、`noise10=0.9399`、`noise5=0.8574`，接近 float32 reference。
@@ -17,15 +17,14 @@
 | 声码器 | 方法 | 来源 | 样本数 | 干净 PESQ | none | noise20 | noise10 | noise5 | 备注 |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | HiFi-GAN | MelShield | 原文 reported | 论文 | 不直接匹配 | 1.0000 | 1.0000 | 0.7815 | 0.7052 | 外部参考 |
-| HiFi-GAN | MelShield | 本地复现，alpha 0.05，band 20:60 | 100 | 3.5069 | 1.0000 | 0.9072 | 0.7097 | 0.6391 | 质量匹配基线 |
-| HiFi-GAN | MelShield | 本地复现，alpha 0.055，band 20:60 | 100 | 3.4324 | 1.0000 | 0.9269 | 0.7325 | 0.6475 | 强度更高，但低于 3.5 PESQ |
-| HiFi-GAN | RelMel | 可靠候选对，pair_candidates 16 | 500 | 3.5102 | 0.9999 | 0.9946 | 0.9455 | 0.8648 | 当前 HiFi-GAN 主结果 |
+| HiFi-GAN | MelShield | 本地复现，alpha 0.05，band 20:60 | 2000 | 3.5100 | 0.9993 | 0.9028 | 0.7129 | 0.6328 | 质量匹配基线 |
+| HiFi-GAN | RAWMER | 可靠候选对，pair_candidates 16 | 2000 | 3.5141 | 0.9999 | 0.9942 | 0.9408 | 0.8587 | 当前 HiFi-GAN 主结果 |
 | DiffWave | MelShield | 原文 reported | 论文 | 不直接匹配 | 1.0000 | 0.9834 | 0.7788 | 0.7006 | 外部参考 |
 | DiffWave | MelShield | 本地复现，alpha 0.05，band 20:56 | 500 | 3.8779 | 0.9996 | 0.9383 | 0.7725 | 0.6824 | 高音质复现基线 |
-| DiffWave | MelShield | 本地复现，alpha 0.06，band 20:60，mf 0.05 | 500 | 3.5492 | 0.9998 | 0.9658 | 0.8212 | 0.7210 | 质量匹配基线 |
-| DiffWave | RelMel | alpha 0.35，mask_floor 0.20，boundary_margin 0.01 | 500 | 3.5443 | 0.9998 | 0.9914 | 0.9225 | 0.8308 | 当前 DiffWave 主结果 |
+| DiffWave | MelShield | 本地复现，alpha 0.06，band 20:60，mf 0.05 | 2000 | 3.5475 | 0.9998 | 0.9661 | 0.8180 | 0.7173 | 质量匹配基线 |
+| DiffWave | RAWMER | alpha 0.35，mask_floor 0.20，boundary_margin 0.01 | 2000 | 3.5419 | 0.9998 | 0.9898 | 0.9194 | 0.8308 | 当前 DiffWave 主结果 |
 
-## RelMel 主配置
+## RAWMER 主配置
 
 ### HiFi-GAN 主结果
 
@@ -33,17 +32,17 @@
 
 | 攻击 | 比特准确率 | 验证率 | PESQ | STOI |
 |---|---:|---:|---:|---:|
-| none | 0.9999 | 1.000 | 3.5102 | 0.9685 |
-| mp3 | 0.9999 | 1.000 | 3.5093 | 0.9685 |
-| aac | 0.9999 | 1.000 | 3.4918 | 0.9683 |
-| scale | 0.9999 | 1.000 | 3.5102 | 0.9685 |
-| rs16 | 0.9999 | 1.000 | 3.5102 | 0.9685 |
-| bandpass | 0.9999 | 1.000 | 3.5299 | 0.9632 |
-| lowpass | 0.9998 | 1.000 | 3.5185 | 0.9678 |
-| noise20 | 0.9946 | 1.000 | 1.5574 | 0.9527 |
-| noise10 | 0.9455 | 0.990 | 1.0994 | 0.8991 |
-| noise5 | 0.8648 | 0.932 | 1.0416 | 0.8430 |
-| echo | 0.9983 | 1.000 | 1.7726 | 0.9177 |
+| none | 0.9999 | 1.000 | 3.5141 | 0.9685 |
+| mp3 | 0.9999 | 1.000 | 3.5133 | 0.9685 |
+| aac | 0.9999 | 1.000 | 3.4954 | 0.9683 |
+| scale | 0.9999 | 1.000 | 3.5141 | 0.9685 |
+| rs16 | 0.9999 | 1.000 | 3.5141 | 0.9685 |
+| bandpass | 0.9999 | 1.000 | 3.5337 | 0.9632 |
+| lowpass | 0.9999 | 1.000 | 3.5222 | 0.9678 |
+| noise20 | 0.9942 | 1.000 | 1.5561 | 0.9525 |
+| noise10 | 0.9408 | 0.991 | 1.0994 | 0.8988 |
+| noise5 | 0.8587 | 0.918 | 1.0415 | 0.8428 |
+| echo | 0.9986 | 1.000 | 1.7707 | 0.9178 |
 
 ### DiffWave 主结果
 
@@ -51,19 +50,37 @@
 
 | 攻击 | 比特准确率 | 验证率 | PESQ | STOI |
 |---|---:|---:|---:|---:|
-| none | 0.9998 | 1.000 | 3.5443 | 0.9612 |
-| mp3 | 0.9998 | 1.000 | 3.5428 | 0.9612 |
-| aac | 0.9998 | 1.000 | 3.5191 | 0.9609 |
-| scale | 0.9998 | 1.000 | 3.5443 | 0.9612 |
-| rs16 | 0.9998 | 1.000 | 3.5443 | 0.9612 |
-| bandpass | 0.9998 | 1.000 | 3.5227 | 0.9559 |
-| lowpass | 0.9989 | 1.000 | 3.6133 | 0.9612 |
-| noise20 | 0.9914 | 1.000 | 1.4930 | 0.9438 |
-| noise10 | 0.9225 | 0.984 | 1.0787 | 0.8932 |
-| noise5 | 0.8308 | 0.852 | 1.0351 | 0.8437 |
-| echo | 0.9971 | 1.000 | 1.6116 | 0.9128 |
+| none | 0.9998 | 1.000 | 3.5419 | 0.9612 |
+| mp3 | 0.9997 | 1.000 | 3.5403 | 0.9611 |
+| aac | 0.9997 | 1.000 | 3.5159 | 0.9609 |
+| scale | 0.9998 | 1.000 | 3.5419 | 0.9612 |
+| rs16 | 0.9998 | 1.000 | 3.5419 | 0.9612 |
+| bandpass | 0.9998 | 1.000 | 3.5212 | 0.9559 |
+| lowpass | 0.9986 | 1.000 | 3.6093 | 0.9612 |
+| noise20 | 0.9898 | 1.000 | 1.4913 | 0.9435 |
+| noise10 | 0.9194 | 0.977 | 1.0782 | 0.8927 |
+| noise5 | 0.8308 | 0.861 | 1.0349 | 0.8429 |
+| echo | 0.9968 | 1.000 | 1.6068 | 0.9128 |
 
 ## MelShield 对照结果
+
+### HiFi-GAN 本地复现，质量匹配配置
+
+配置：`alpha=0.05`，`band=20:60`，`mask_floor=0.05`，`energy_gamma=0.75`，`boundary_margin=0.02`，`threshold=0.61`，`align_max_shift=12`，`headroom=0.0`。该结果来自 random2000 全攻击实验。
+
+| 攻击 | 比特准确率 | 验证率 | PESQ | STOI |
+|---|---:|---:|---:|---:|
+| none | 0.9993 | 1.000 | 3.5100 | 0.9687 |
+| mp3 | 0.9993 | 1.000 | 3.5093 | 0.9687 |
+| aac | 0.9992 | 1.000 | 3.4940 | 0.9685 |
+| scale | 0.9993 | 1.000 | 3.5100 | 0.9687 |
+| rs16 | 0.9993 | 1.000 | 3.5100 | 0.9687 |
+| bandpass | 0.9992 | 1.000 | 3.5612 | 0.9639 |
+| lowpass | 0.9980 | 1.000 | 3.5087 | 0.9681 |
+| noise20 | 0.9028 | 0.999 | 1.5483 | 0.9523 |
+| noise10 | 0.7129 | 0.874 | 1.0972 | 0.8974 |
+| noise5 | 0.6328 | 0.612 | 1.0410 | 0.8400 |
+| echo | 0.9829 | 1.000 | 1.7740 | 0.9181 |
 
 ### DiffWave 原文 reported
 
@@ -100,38 +117,38 @@
 | noise5 | 0.6824 | 0.800 | 1.0349 | 0.8478 |
 | echo | 0.9945 | 1.000 | 1.6347 | 0.9167 |
 
-这组配置的干净 PESQ 明显高于 RelMel + DiffWave 主配置，因此更适合作为高音质 MelShield 复现参考，而不是质量严格匹配的主对照。
+这组配置的干净 PESQ 明显高于 RAWMER + DiffWave 主配置，因此更适合作为高音质 MelShield 复现参考，而不是质量严格匹配的主对照。
 
 ### DiffWave 本地复现，质量匹配配置
 
-配置：`alpha=0.06`，`band=20:60`，`mask_floor=0.05`，`energy_gamma=0.75`，`boundary_margin=0.02`，`threshold=0.61`，`align_max_shift=12`，`headroom=0.0`。DiffWave 固定采样种子为 0。
+配置：`alpha=0.06`，`band=20:60`，`mask_floor=0.05`，`energy_gamma=0.75`，`boundary_margin=0.02`，`threshold=0.61`，`align_max_shift=12`，`headroom=0.0`。DiffWave 固定采样种子为 0。该结果来自 random2000 全攻击实验。
 
 | 攻击 | 比特准确率 | 验证率 | PESQ | STOI |
 |---|---:|---:|---:|---:|
-| none | 0.9998 | 1.000 | 3.5492 | 0.9555 |
-| mp3 | 0.9997 | 1.000 | 3.5479 | 0.9555 |
-| aac | 0.9999 | 1.000 | 3.5338 | 0.9553 |
-| scale | 0.9998 | 1.000 | 3.5492 | 0.9555 |
-| rs16 | 0.9993 | 1.000 | 3.5492 | 0.9555 |
-| bandpass | 0.9991 | 1.000 | 3.5467 | 0.9505 |
-| lowpass | 0.9954 | 1.000 | 3.6115 | 0.9554 |
-| noise20 | 0.9658 | 1.000 | 1.4981 | 0.9391 |
-| noise10 | 0.8212 | 0.966 | 1.0788 | 0.8921 |
-| noise5 | 0.7210 | 0.872 | 1.0350 | 0.8442 |
-| echo | 0.9975 | 1.000 | 1.6060 | 0.9068 |
+| none | 0.9998 | 1.000 | 3.5475 | 0.9554 |
+| mp3 | 0.9998 | 1.000 | 3.5461 | 0.9553 |
+| aac | 0.9998 | 1.000 | 3.5320 | 0.9551 |
+| scale | 0.9998 | 1.000 | 3.5475 | 0.9554 |
+| rs16 | 0.9994 | 1.000 | 3.5475 | 0.9554 |
+| bandpass | 0.9992 | 1.000 | 3.5450 | 0.9503 |
+| lowpass | 0.9956 | 1.000 | 3.6105 | 0.9552 |
+| noise20 | 0.9661 | 1.000 | 1.4969 | 0.9387 |
+| noise10 | 0.8180 | 0.969 | 1.0783 | 0.8914 |
+| noise5 | 0.7173 | 0.862 | 1.0348 | 0.8434 |
+| echo | 0.9972 | 1.000 | 1.6010 | 0.9065 |
 
-在相同 random500、全攻击协议，并且干净 PESQ 基本匹配的条件下，RelMel + DiffWave 相比本地复现 MelShield + DiffWave：`noise20` 提升 2.6 个百分点，`noise10` 提升 10.1 个百分点，`noise5` 提升 11.0 个百分点。非噪声攻击下两者都接近满分。
+在相同 random2000、全攻击协议，并且干净 PESQ 基本匹配的条件下，RAWMER + HiFi-GAN 相比本地复现 MelShield + HiFi-GAN 在 `noise20/noise10/noise5` 上分别提升约 9.1、22.8、22.6 个百分点；RAWMER + DiffWave 相比本地复现 MelShield + DiffWave 分别提升约 2.4、10.1、11.3 个百分点。非噪声攻击下两者都接近满分。
 
 ### DiffWave 质量边缘 pilot
 
-本组实验用于寻找与 RelMel + DiffWave 主配置干净 PESQ 更接近的 MelShield + DiffWave 参数。random40，攻击为 `none noise20 noise10 noise5`。candidate 7 已完成 random500 全攻击，结果见上方质量匹配配置。
+本组实验用于寻找与 RAWMER + DiffWave 主配置干净 PESQ 更接近的 MelShield + DiffWave 参数。random40，攻击为 `none noise20 noise10 noise5`。candidate 7 已完成 random2000 全攻击，结果见上方质量匹配配置。
 
 | candidate | alpha | band | mask_floor | 干净 PESQ | none | noise20 | 选择说明 |
 |---:|---:|---|---:|---:|---:|---:|---|
 | 5 | 0.060 | 20:56 | 0.05 | 3.5732 | 1.0000 | 0.9602 | 音质略高 |
 | 6 | 0.060 | 20:56 | 0.075 | 3.5667 | 1.0000 | 0.9633 | pilot objective 最高 |
-| 7 | 0.060 | 20:60 | 0.05 | 3.5450 | 1.0000 | 0.9617 | 与 RelMel + DiffWave 的 PESQ 3.5443 最接近，已完成 random500 |
-| 8 | 0.060 | 20:60 | 0.075 | 3.5392 | 1.0000 | 0.9617 | 更接近 3.5，但 PESQ 略低于 RelMel |
+| 7 | 0.060 | 20:60 | 0.05 | 3.5450 | 1.0000 | 0.9617 | 与 RAWMER + DiffWave 的 PESQ 3.54 最接近，已完成 random2000 |
+| 8 | 0.060 | 20:60 | 0.075 | 3.5392 | 1.0000 | 0.9617 | 更接近 3.5，但 PESQ 略低于 RAWMER |
 
 `alpha=0.065` 的候选已经低于 3.5 PESQ，因此不适合作为质量合格的主对照。candidate 7 是当前 DiffWave MelShield 质量匹配主对照。
 
@@ -182,7 +199,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | noise5 | 0.4926 | 0.034 | 0.000 | 1.0337 | 0.4978 | 0.046 | 0.000 | 1.0293 |
 | echo | 0.9915 | 1.000 | 1.000 | 1.8560 | 0.9960 | 1.000 | 1.000 | 1.6629 |
 
-结论：AudioSeal 和 WavMark 在压缩、缩放、重采样、滤波、回声等非噪声攻击下非常强，同时水印引入的干净音质损失也很小。但在加性噪声攻击下，尤其 `noise10/noise5`，二者作为波形后处理 watermark 的验证率明显低于 RelMel。WavMark 的 forced ACC 显示其 `noise10/noise5` 已接近随机水平，而高层接口 decode rate 在这两类攻击下为 0。与它们对比时需要强调 payload 长度不同：AudioSeal/WavMark 为 16 bit，RelMel/MelShield 主实验为 32 bit。
+结论：AudioSeal 和 WavMark 在压缩、缩放、重采样、滤波、回声等非噪声攻击下非常强，同时水印引入的干净音质损失也很小。但在加性噪声攻击下，尤其 `noise10/noise5`，二者作为波形后处理 watermark 的验证率明显低于 RAWMER。WavMark 的 forced ACC 显示其 `noise10/noise5` 已接近随机水平，而高层接口 decode rate 在这两类攻击下为 0。与它们对比时需要强调 payload 长度不同：AudioSeal/WavMark 为 16 bit，RAWMER/MelShield 主实验为 32 bit。
 
 ## Reference 合理性与假阳性负控
 
@@ -226,7 +243,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | uint4 | 22.09 | 0.9986 / 1.000 | 0.9839 / 1.000 | 0.9112 / 0.976 | 0.8244 / 0.846 | 明显压缩，鲁棒性下降 |
 | band_uint8 | 22.09 | 1.0000 / 1.000 | 0.9941 / 1.000 | 0.9399 / 0.992 | 0.8574 / 0.920 | 只存水印频带，推荐 |
 
-结论：RelMel 不需要保存完整 float32 mel reference。只保存 `20:60` 频带的 8-bit reference，平均约 22KB/utterance，存储成本约为 float32 全 mel 的 1/8，同时 `noise20/noise10/noise5` 与 float32 基准基本一致。这为 reference-based verification 的实际部署提供了更合理的存储口径。
+结论：RAWMER 不需要保存完整 float32 mel reference。只保存 `20:60` 频带的 8-bit reference，平均约 22KB/utterance，存储成本约为 float32 全 mel 的 1/8，同时 `noise20/noise10/noise5` 与 float32 基准基本一致。这为 reference-based verification 的实际部署提供了更合理的存储口径。
 
 ## 裁剪与局部片段验证
 
@@ -243,7 +260,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | end50 | 0.500 | 6.54 | 0.9987 | 1.000 | 3.5161 | 0.9692 |
 | middle75 | 0.750 | 9.93 | 0.9998 | 1.000 | 3.5256 | 0.9694 |
 
-结论：即使只保留 25% 音频片段，RelMel 仍保持约 0.989 到 0.991 bit accuracy，验证率为 1.000；50% 以上片段几乎接近完整音频结果。这说明块级重复嵌入让水印证据在时间维度上分布较均匀。
+结论：即使只保留 25% 音频片段，RAWMER 仍保持约 0.989 到 0.991 bit accuracy，验证率为 1.000；50% 以上片段几乎接近完整音频结果。这说明块级重复嵌入让水印证据在时间维度上分布较均匀。
 
 ### 盲搜索局部片段验证
 
@@ -258,7 +275,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | middle50 | 0.500 | 71.7 | 1.04 / 1.0 | 6.66 | 0.9973 | 1.000 | 3.5481 | 0.9698 |
 | end50 | 0.500 | 71.7 | 1.00 / 1.0 | 6.57 | 0.9989 | 1.000 | 3.5161 | 0.9692 |
 
-结论：在不提供裁剪起点的盲搜索设置下，25% 片段仍保持 0.985 到 0.991 ACC，VR 为 0.998 到 1.000；50% 片段保持 0.997 以上 ACC 和 1.000 VR。搜索定位误差很小，非起始片段的起点误差中位数约为 1 个 mel frame。这组结果比已知位置片段实验更适合作为主文证据，说明 RelMel 的 reference-assisted verification 可以处理局部片段和未知裁剪位置。
+结论：在不提供裁剪起点的盲搜索设置下，25% 片段仍保持 0.985 到 0.991 ACC，VR 为 0.998 到 1.000；50% 片段保持 0.997 以上 ACC 和 1.000 VR。搜索定位误差很小，非起始片段的起点误差中位数约为 1 个 mel frame。这组结果比已知位置片段实验更适合作为主文证据，说明 RAWMER 的 reference-assisted verification 可以处理局部片段和未知裁剪位置。
 
 ## 现代攻击扩展评测
 
@@ -282,11 +299,11 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | speed090 | 0.6632 / 0.260 | 1.2531 | 0.6510 / 0.186 | 1.2529 | 0.9 倍速，时间尺度改变 |
 | speed110 | 0.6867 / 0.320 | 1.8922 | 0.6678 / 0.250 | 1.8895 | 1.1 倍速，时间尺度改变 |
 
-结论：RelMel 对低码率压缩、滤波、幅度裁剪、8-bit 量化和较强混响在两种声码器下都保持较高鲁棒性，其中多数攻击下验证率为 1.000。DiffWave 下 `rs8` 有一定下降，但仍保持 0.9483 ACC 和 0.994 VR。主要薄弱点在两个声码器上保持一致：时间尺度改变和 pitch shift 会破坏当前以 reference frame alignment 为基础的小范围平移对齐假设。0 dB 噪声下仍有约 0.73 到 0.75 bit accuracy，但验证率下降到 0.486 到 0.598，说明极强噪声是另一个边界条件。轻微同步扰动的退化边界见下一节。
+结论：RAWMER 对低码率压缩、滤波、幅度裁剪、8-bit 量化和较强混响在两种声码器下都保持较高鲁棒性，其中多数攻击下验证率为 1.000。DiffWave 下 `rs8` 有一定下降，但仍保持 0.9483 ACC 和 0.994 VR。主要薄弱点在两个声码器上保持一致：时间尺度改变和 pitch shift 会破坏当前以 reference frame alignment 为基础的小范围平移对齐假设。0 dB 噪声下仍有约 0.73 到 0.75 bit accuracy，但验证率下降到 0.486 到 0.598，说明极强噪声是另一个边界条件。轻微同步扰动的退化边界见下一节。
 
 ## 同步扰动强度曲线
 
-本实验细化 `speed` 和 `pitch shift` 的强度边界。协议：RelMel + HiFi-GAN，random500，`band=20:60`，主配置不变。当前记录来自 `runs/relmel_hifigan_speed_pitch_curve_random500`。`pitch_up25/down25` 表示约 ±25 cents，`pitch_up50/down50` 表示约 ±50 cents，`pitch_up/down` 表示约 ±100 cents，也就是 1 个半音。
+本实验细化 `speed` 和 `pitch shift` 的强度边界。协议：RAWMER + HiFi-GAN，random500，`band=20:60`，主配置不变。当前记录来自 `runs/relmel_hifigan_speed_pitch_curve_random500`。`pitch_up25/down25` 表示约 ±25 cents，`pitch_up50/down50` 表示约 ±50 cents，`pitch_up/down` 表示约 ±100 cents，也就是 1 个半音。
 
 | 扰动 | ACC | VR | PESQ | STOI | 说明 |
 |---|---:|---:|---:|---:|---|
@@ -304,7 +321,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 | speed090 | 0.6632 | 0.260 | 1.2531 | 0.1391 | 0.90 倍速 |
 | speed110 | 0.6867 | 0.320 | 1.8922 | 0.1643 | 1.10 倍速 |
 
-结论：RelMel 对轻微 pitch shift 很稳，±50 cents 以内仍保持约 0.995 以上 ACC 和 1.000 VR；但 1 个半音时下降到约 0.78 ACC。时间尺度扰动更敏感：±3% speed 仍基本可用，±5% 开始明显下降，±10% 是当前方法的鲁棒边界。这支持一个清晰论点：RelMel 的主要失败机制不是水印能量消失，而是 reference 和 suspect mel 之间的时间/频率同步关系被破坏。
+结论：RAWMER 对轻微 pitch shift 很稳，±50 cents 以内仍保持约 0.995 以上 ACC 和 1.000 VR；但 1 个半音时下降到约 0.78 ACC。时间尺度扰动更敏感：±3% speed 仍基本可用，±5% 开始明显下降，±10% 是当前方法的鲁棒边界。这支持一个清晰论点：RAWMER 的主要失败机制不是水印能量消失，而是 reference 和 suspect mel 之间的时间/频率同步关系被破坏。
 
 ## 关键消融实验
 
@@ -334,7 +351,7 @@ HiFi-GAN 和 DiffWave 均使用 forced ACC 和 forced VR；decode rate 用于说
 
 ## DiffWave 调参摘要
 
-RelMel + DiffWave 的有用强度区间集中在 `alpha=0.30` 到 `0.35`。当前选择 `alpha=0.35, mask_floor=0.20, boundary_margin=0.01`，因为 random500 全攻击下干净 PESQ 为 3.5443，同时 `noise10=0.9225`、`noise5=0.8308`。
+RAWMER + DiffWave 的有用强度区间集中在 `alpha=0.30` 到 `0.35`。当前选择 `alpha=0.35, mask_floor=0.20, boundary_margin=0.01`，因为 random2000 全攻击下干净 PESQ 为 3.5419，同时 `noise10=0.9194`、`noise5=0.8308`。
 
 | alpha | mask_floor | boundary_margin | 干净 PESQ | none | noise20 | noise10 | noise5 | 说明 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -346,7 +363,7 @@ RelMel + DiffWave 的有用强度区间集中在 `alpha=0.30` 到 `0.35`。当�
 ## 写论文时的口径
 
 - reported 数据和本地复现数据要分开表述，不能混成同一个公平协议。
-- HiFi-GAN 的主对比已经基本完整：RelMel 在相近干净 PESQ 下明显强于本地复现 MelShield。
-- DiffWave 的质量匹配主对照已经完成：在干净 PESQ 基本一致的条件下，RelMel 对 `noise20/noise10/noise5` 的提升分别约为 2.6、10.1、11.0 个百分点。
+- HiFi-GAN 的主对比已经扩展到 random2000：RAWMER 在相近干净 PESQ 下明显强于本地复现 MelShield，对 `noise20/noise10/noise5` 的提升分别约为 9.1、22.8、22.6 个百分点。
+- DiffWave 的质量匹配主对照已经扩展到 random2000：在干净 PESQ 基本一致的条件下，RAWMER 对 `noise20/noise10/noise5` 的提升分别约为 2.4、10.1、11.3 个百分点。
 - AudioSeal/WavMark 是波形后处理 baseline，payload 为 16 bit；应作为跨范式公开强 baseline 单独成组，而不是与 32 bit 梅尔域方法直接混成同一公平协议。
 - 方法贡献建议表述为：基于块级相对 Mel 关系的可靠候选对选择机制，提高了水印在加性噪声下的稳定性。

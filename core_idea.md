@@ -1,18 +1,22 @@
-# RelMel 工作核心思路说明
+# RAWMER 工作核心思路说明
+
+论文标题：**RAWMER: Reference-Assisted Speech Watermarking via Relative Mel-Energy Relations**
+
+说明：本文档中，**RAWMER** 是论文和方法的正式名称，来自 **R**eference-**A**ssisted Speech **W**atermarking via Relative **M**el-**E**nergy **R**elations；**RelMel** 是代码、实验目录和早期讨论中使用的内部简称，指向同一核心方法，即 relative mel-energy relations（相对梅尔能量关系）。
 
 本文档用于让没有任何上下文背景的读者或 AI 模型理解本工作的研究问题、方法设计、实验结果、论文叙事和边界条件。它不是论文正文，而是一份写作和沟通用的技术说明。
 
 ## 0. 一句话总结
 
-RelMel 是一种用于神经语音生成场景的 reference-assisted mel-domain speech watermarking（参考辅助的梅尔域语音水印）方法。它不是把 payload（载荷信息）写成某个 mel bin（梅尔频带格）的绝对扰动，而是写成多个时间块内两组 mel bins 之间的 relative energy relation（相对能量关系）。平台方保存生成时的 clean mel reference（干净梅尔参考）或其压缩版本，后续用疑似音频与 reference 对比，恢复 payload 并验证归属。
+RAWMER 是一种用于神经语音生成场景的 reference-assisted mel-domain speech watermarking（参考辅助的梅尔域语音水印）方法。它不是把 payload（载荷信息）写成某个 mel bin（梅尔频带格）的绝对扰动，而是写成多个时间块内两组 mel bins 之间的 relative energy relation（相对能量关系）。平台方保存生成时的 clean mel reference（干净梅尔参考）或其压缩版本，后续用疑似音频与 reference 对比，恢复 payload 并验证归属。
 
 英文核心表述：
 
-> RelMel uses reference-assisted relative energy relations in mel spectrograms to make speech watermarks more robust to vocoding and additive noise while keeping storage and verification practical.
+> RAWMER uses reference-assisted relative energy relations in mel spectrograms to make speech watermarks more robust to vocoding and additive noise while keeping storage and verification practical.
 
 中文核心表述：
 
-> RelMel 通过在梅尔谱中嵌入可验证的相对能量关系，使语音水印在声码器重建和加性噪声攻击下更加稳定，同时保持参考存储和平台侧验证的实际可行性。
+> RAWMER 通过在梅尔谱中嵌入可验证的相对能量关系，使语音水印在声码器重建和加性噪声攻击下更加稳定，同时保持参考存储和平台侧验证的实际可行性。
 
 ## 1. 研究背景：为什么语音水印重要
 
@@ -34,16 +38,17 @@ Audio watermarking（音频水印）因此成为一种重要方案。水印方�
 在这个设定中，平台方在生成语音时保存一些 reference information（参考信息），例如：
 
 - utterance id（语音编号）
-- secret key（密钥）
-- payload（载荷）
+- payload commitment（载荷承诺）或可由 utterance id 和 secret key 重算 payload 的元信息
 - clean mel spectrogram（生成时未加水印或加水印前的干净梅尔谱）
 - 或 clean mel 的压缩版本
+
+secret key（密钥）不应作为普通 reference 文件的一部分明文存储，而应保存在 verifier（验证方）的受保护状态中。这样 reference 泄露时，攻击者最多得到 clean mel 或压缩 mel，不能直接伪造任意 payload 的合法水印。
 
 后续如果出现一段疑似音频，平台方可以问：
 
 > 这段音频是否来自我保存的某条生成记录，并且是否携带对应 payload？
 
-这和 blind detection 的目标不同。RelMel 的目标不是让任何第三方无上下文地检测所有水印，而是帮助服务方做 private provenance verification（私有来源验证）、forensic attribution（取证归属）和 audit（审计）。
+这和 blind detection 的目标不同。RAWMER 的目标不是让任何第三方无上下文地检测所有水印，而是帮助服务方做 private provenance verification（私有来源验证）、forensic attribution（取证归属）和 audit（审计）。
 
 这个设定有实际合理性：
 
@@ -105,9 +110,9 @@ MelShield 证明了 mel-domain reference-assisted watermarking 是可行的。�
 
 实验上，MelShield 在 `noise10/noise5` 这类较强加性噪声条件下 bit accuracy 明显下降。本文的核心动机就是：能否在同样 reference-assisted 的 mel 域设定下，让水印不依赖脆弱的绝对模式，而依赖更稳定的相对关系？
 
-## 5. RelMel 的核心观察
+## 5. RAWMER 的核心观察
 
-RelMel 的关键观察是：
+RAWMER 的关键观察是：
 
 > 在同一个局部时间块内，两组 mel 频带之间的相对能量关系，往往比单个 mel bin 的绝对残差更稳定。
 
@@ -125,9 +130,9 @@ positive group 相对 negative group 是否按 payload 指定方向发生了能�
 
 这种设计类似差分测量。许多攻击或声码器误差会对一段局部 mel 区域产生共同影响，例如整体增益变化、局部重建偏差、轻微滤波等。相对差分可以抵消一部分共同扰动。
 
-## 6. RelMel 如何编码一个 bit
+## 6. RAWMER 如何编码一个 bit
 
-对每个 payload bit 和每个时间 block，RelMel 在指定 mel band 中选择两组 mel bins：
+对每个 payload bit 和每个时间 block，RAWMER 在指定 mel band 中选择两组 mel bins：
 
 - positive group（正组）
 - negative group（负组）
@@ -142,7 +147,7 @@ positive group 相对 negative group 是否按 payload 指定方向发生了能�
 - 降低 positive group 的能量
 - 提高 negative group 的能量
 
-检测时，RelMel 不直接看某个频带的绝对值，而是计算 residual 上两组之间的差：
+检测时，RAWMER 不直接看某个频带的绝对值，而是计算 residual 上两组之间的差：
 
 ```text
 score = mean(residual on positive group) - mean(residual on negative group)
@@ -157,11 +162,11 @@ score = mean(residual on positive group) - mean(residual on negative group)
 residual = suspect_mel - reference_clean_mel
 ```
 
-也就是说，RelMel 依赖 clean reference 作为坐标系，观察疑似音频相对于原始 clean mel 的变化。
+也就是说，RAWMER 依赖 clean reference 作为坐标系，观察疑似音频相对于原始 clean mel 的变化。
 
-## 7. RelMel 的完整嵌入流程
+## 7. RAWMER 的完整嵌入流程
 
-一次 RelMel 嵌入可以理解为以下步骤：
+一次 RAWMER 嵌入可以理解为以下步骤：
 
 1. 输入 clean mel spectrogram。
 2. 根据 utterance id 和 secret key 生成 payload 或读取指定 payload。
@@ -184,7 +189,7 @@ residual = suspect_mel - reference_clean_mel
 
 ## 8. 块级重复嵌入为什么重要
 
-RelMel 不是只在一个位置写入 payload。它把 payload 分散写入多个时间 block，并在检测时把多个 block 的证据合并。
+RAWMER 不是只在一个位置写入 payload。它把 payload 分散写入多个时间 block，并在检测时把多个 block 的证据合并。
 
 这样做有几个好处：
 
@@ -210,7 +215,7 @@ RelMel 不是只在一个位置写入 payload。它把 payload 分散写入多�
 
 ## 9. Reliable pair selection：为什么不能随机选频带
 
-RelMel 的一个关键机制是 reliable pair selection（可靠候选对选择）。
+RAWMER 的一个关键机制是 reliable pair selection（可靠候选对选择）。
 
 如果只是随机选择 positive group 和 negative group，会遇到几个问题：
 
@@ -219,7 +224,7 @@ RelMel 的一个关键机制是 reliable pair selection（可靠候选对选择�
 - positive group 和 negative group 的可靠性不平衡，会导致 score 有偏。
 - 某些频带对在当前 utterance 中几乎没有语音结构，扰动传播到 waveform 后容易丢失。
 
-因此，RelMel 对每个 bit/block 不是只生成一个 pair，而是生成多个 candidate pairs（候选对），再用 clean mel 的局部结构选择最可靠的一组。
+因此，RAWMER 对每个 bit/block 不是只生成一个 pair，而是生成多个 candidate pairs（候选对），再用 clean mel 的局部结构选择最可靠的一组。
 
 可靠性主要来自两个方面：
 
@@ -252,11 +257,11 @@ candidate_score = min(pos_reliability, neg_reliability)
 - `noise5` 从 0.6684 提升到 0.8607
 - 干净 PESQ 只从 3.5485 降到 3.5102
 
-这说明 reliable pair selection 是 RelMel 鲁棒性提升的核心来源之一。
+这说明 reliable pair selection 是 RAWMER 鲁棒性提升的核心来源之一。
 
 ## 10. Verification 标准：到底怎样算通过
 
-RelMel 的检测目标不是单纯判断“有没有水印”，而是验证一个具体 payload 是否匹配。
+RAWMER 的检测目标不是单纯判断“有没有水印”，而是验证一个具体 payload 是否匹配。
 
 验证流程：
 
@@ -289,7 +294,7 @@ bit_accuracy = number_of_correct_bits / total_payload_bits
 - clean_unmarked、wrong_key、wrong_payload、wrong_reference 的 bit accuracy 基本回到 0.5 附近。
 - random2000 无攻击扩展中，wrong_key、wrong_payload、wrong_reference 的验证率分别为 0.15%、0.40%、0.35%。
 
-这说明阈值 0.75 并没有导致明显过度自信。RelMel 的通过依赖正确 reference、key 和 payload 的组合。
+这说明阈值 0.75 并没有导致明显过度自信。RAWMER 的通过依赖正确 reference、key 和 payload 的组合。
 
 ## 11. Confidence 不能单独作为归属依据
 
@@ -332,9 +337,9 @@ Reference compression（参考压缩）实验比较了几种格式：
 
 ## 13. 与 MelShield 的核心区别
 
-RelMel 和 MelShield 都是 mel-domain、reference-assisted 方法，但核心区别如下：
+RAWMER 和 MelShield 都是 mel-domain、reference-assisted 方法，但核心区别如下：
 
-| 方面 | MelShield | RelMel |
+| 方面 | MelShield | RAWMER |
 |---|---|---|
 | 水印表示 | 绝对扰动模式 | 相对能量关系 |
 | 检测信号 | residual 与伪随机 pattern 的相关性 | positive/negative groups 的 residual 差分 |
@@ -343,31 +348,42 @@ RelMel 和 MelShield 都是 mel-domain、reference-assisted 方法，但核心�
 | 强噪声表现 | `noise10/noise5` 下降明显 | 在相近音质下明显更稳 |
 | 可解释性 | 能解释为模式相关 | 能解释为局部频带相对关系 |
 
-在 DiffWave 质量匹配主对照中：
+在 random2000 的 DiffWave 质量匹配主对照中：
 
-- MelShield + DiffWave：干净 PESQ 3.5492
-  - `noise20=0.9658`
-  - `noise10=0.8212`
-  - `noise5=0.7210`
-- RelMel + DiffWave：干净 PESQ 3.5443
-  - `noise20=0.9914`
-  - `noise10=0.9225`
+- MelShield + DiffWave：干净 PESQ 3.5475
+  - `noise20=0.9661`
+  - `noise10=0.8180`
+  - `noise5=0.7173`
+- RAWMER + DiffWave：干净 PESQ 3.5419
+  - `noise20=0.9898`
+  - `noise10=0.9194`
   - `noise5=0.8308`
 
-在相近音质下，RelMel 对 `noise10` 和 `noise5` 的提升尤其明显。
+在 random2000 的 HiFi-GAN 质量匹配主对照中：
+
+- MelShield + HiFi-GAN：干净 PESQ 3.5100
+  - `noise20=0.9028`
+  - `noise10=0.7129`
+  - `noise5=0.6328`
+- RAWMER + HiFi-GAN：干净 PESQ 3.5141
+  - `noise20=0.9942`
+  - `noise10=0.9408`
+  - `noise5=0.8587`
+
+在相近音质下，RAWMER 对 `noise10` 和 `noise5` 的提升尤其明显；HiFi-GAN 下提升更大，DiffWave 下也保持稳定优势。
 
 ## 14. 与 AudioSeal / WavMark 的关系
 
 AudioSeal 和 WavMark 是 waveform-domain（波形域）baseline。它们通常直接在 waveform 上嵌入 16-bit payload，并用对应检测器恢复。
 
-它们和 RelMel 属于不同范式：
+它们和 RAWMER 属于不同范式：
 
 - AudioSeal/WavMark：waveform-domain，通常更接近 blind 或 detector-based。
-- RelMel/MelShield：mel-domain，reference-assisted。
+- RAWMER/MelShield：mel-domain，reference-assisted。
 - AudioSeal/WavMark 主实验是 16-bit payload。
-- RelMel/MelShield 主实验是 32-bit payload。
+- RAWMER/MelShield 主实验是 32-bit payload。
 
-因此论文中不应把它们和 RelMel 混成完全公平同范式对照，而应作为 strong waveform baselines（强波形基线）单独成组。
+因此论文中不应把它们和 RAWMER 混成完全公平同范式对照，而应作为 strong waveform baselines（强波形基线）单独成组。
 
 实验结论比较清楚：
 
@@ -384,9 +400,9 @@ AudioSeal 和 WavMark 是 waveform-domain（波形域）baseline。它们通常�
 
 这些结果支持一种谨慎表述：
 
-> 在本文的 reference-assisted TTS verification setting 下，RelMel 在强加性噪声条件下比这些 waveform baselines 更稳定；但 AudioSeal 和 WavMark 在非噪声攻击和干净音质方面仍是强 baseline。
+> 在本文的 reference-assisted TTS verification setting 下，RAWMER 在强加性噪声条件下比这些 waveform baselines 更稳定；但 AudioSeal 和 WavMark 在非噪声攻击和干净音质方面仍是强 baseline。
 
-不要写成“RelMel 全面碾压 AudioSeal/WavMark”。
+不要写成“RAWMER 全面碾压 AudioSeal/WavMark”。
 
 ## 15. 主实验结果摘要
 
@@ -394,7 +410,7 @@ AudioSeal 和 WavMark 是 waveform-domain（波形域）baseline。它们通常�
 
 ### HiFi-GAN 主结果
 
-RelMel + HiFi-GAN 主配置：
+RAWMER + HiFi-GAN 主配置：
 
 - `alpha=0.435`
 - `band=20:60`
@@ -407,17 +423,17 @@ RelMel + HiFi-GAN 主配置：
 - `pair_candidates=16`
 - `detector_mode=plain`
 
-random500 全攻击结果：
+random2000 全攻击结果：
 
-- `none`：ACC 0.9999，VR 1.000，PESQ 3.5102，STOI 0.9685
-- `noise20`：ACC 0.9946，VR 1.000，PESQ 1.5574，STOI 0.9527
-- `noise10`：ACC 0.9455，VR 0.990，PESQ 1.0994，STOI 0.8991
-- `noise5`：ACC 0.8648，VR 0.932，PESQ 1.0416，STOI 0.8430
+- `none`：ACC 0.9999，VR 1.000，PESQ 3.5141，STOI 0.9685
+- `noise20`：ACC 0.9942，VR 1.000，PESQ 1.5561，STOI 0.9525
+- `noise10`：ACC 0.9408，VR 0.991，PESQ 1.0994，STOI 0.8988
+- `noise5`：ACC 0.8587，VR 0.918，PESQ 1.0415，STOI 0.8428
 - mp3、aac、scale、rs16、bandpass、lowpass、echo 等非噪声攻击基本接近 1.000 验证率。
 
 ### DiffWave 主结果
 
-RelMel + DiffWave 主配置：
+RAWMER + DiffWave 主配置：
 
 - `alpha=0.35`
 - `band=20:60`
@@ -426,15 +442,31 @@ RelMel + DiffWave 主配置：
 - 其他核心参数与 HiFi-GAN 主配置一致
 - DiffWave sampling seed 固定为 0
 
-random500 全攻击结果：
+random2000 全攻击结果：
 
-- `none`：ACC 0.9998，VR 1.000，PESQ 3.5443，STOI 0.9612
-- `noise20`：ACC 0.9914，VR 1.000，PESQ 1.4930，STOI 0.9438
-- `noise10`：ACC 0.9225，VR 0.984，PESQ 1.0787，STOI 0.8932
-- `noise5`：ACC 0.8308，VR 0.852，PESQ 1.0351，STOI 0.8437
+- `none`：ACC 0.9998，VR 1.000，PESQ 3.5419，STOI 0.9612
+- `noise20`：ACC 0.9898，VR 1.000，PESQ 1.4913，STOI 0.9435
+- `noise10`：ACC 0.9194，VR 0.977，PESQ 1.0782，STOI 0.8927
+- `noise5`：ACC 0.8308，VR 0.861，PESQ 1.0349，STOI 0.8429
 - 非噪声攻击基本稳定。
 
-### 质量匹配 MelShield + DiffWave 对照
+### 质量匹配 MelShield 对照
+
+MelShield + HiFi-GAN 本地复现质量匹配配置：
+
+- `alpha=0.050`
+- `band=20:60`
+- `mask_floor=0.05`
+- `energy_gamma=0.75`
+- `boundary_margin=0.02`
+- `threshold=0.61`
+
+random2000 全攻击结果：
+
+- `none`：ACC 0.9993，VR 1.000，PESQ 3.5100
+- `noise20`：ACC 0.9028，VR 0.999
+- `noise10`：ACC 0.7129，VR 0.874
+- `noise5`：ACC 0.6328，VR 0.612
 
 MelShield + DiffWave 本地复现质量匹配配置：
 
@@ -445,14 +477,14 @@ MelShield + DiffWave 本地复现质量匹配配置：
 - `boundary_margin=0.02`
 - `threshold=0.61`
 
-random500 全攻击结果：
+random2000 全攻击结果：
 
-- `none`：ACC 0.9998，VR 1.000，PESQ 3.5492
-- `noise20`：ACC 0.9658，VR 1.000
-- `noise10`：ACC 0.8212，VR 0.966
-- `noise5`：ACC 0.7210，VR 0.872
+- `none`：ACC 0.9998，VR 1.000，PESQ 3.5475
+- `noise20`：ACC 0.9661，VR 1.000
+- `noise10`：ACC 0.8180，VR 0.969
+- `noise5`：ACC 0.7173，VR 0.862
 
-与 RelMel + DiffWave 相比，干净 PESQ 基本匹配，但 RelMel 在强噪声下更稳。
+与 RAWMER 相比，干净 PESQ 基本匹配，但 RAWMER 在强噪声下更稳。
 
 ## 16. 负控实验：证明不是假阳性
 
@@ -488,7 +520,7 @@ random2000，无攻击扩展：
 
 局部片段实验回答一个实际问题：
 
-> 如果只拿到原音频的一小段，RelMel 还能验证吗？
+> 如果只拿到原音频的一小段，RAWMER 还能验证吗？
 
 已知位置实验中，验证器知道裁剪片段在 reference 中的位置。结果显示：
 
@@ -514,7 +546,7 @@ random2000，无攻击扩展：
 - start 片段起点误差均值/中位数为 0。
 - middle/end 片段起点误差中位数约 1 个 mel frame。
 
-这说明 RelMel 不只是“完整音频可验证”，也可以处理局部片段和未知裁剪位置。
+这说明 RAWMER 不只是“完整音频可验证”，也可以处理局部片段和未知裁剪位置。
 
 ## 18. 现代攻击实验与边界
 
@@ -535,13 +567,13 @@ random2000，无攻击扩展：
 
 结果说明：
 
-- RelMel 对低码率压缩、滤波、重采样、裁剪、量化、混响总体很稳。
+- RAWMER 对低码率压缩、滤波、重采样、裁剪、量化、混响总体很稳。
 - 0 dB 噪声是加性噪声鲁棒性的边界，HiFi-GAN 下 ACC 约 0.7516，VR 0.598；DiffWave 下 ACC 约 0.7294，VR 0.486。
 - 强 speed change 和 pitch shift 是当前方法的主要弱点。
 
 为什么 speed/pitch 会弱？
 
-- RelMel 当前检测依赖 reference mel 和 suspect mel 之间的 frame-level alignment（帧级对齐）。
+- RAWMER 当前检测依赖 reference mel 和 suspect mel 之间的 frame-level alignment（帧级对齐）。
 - speed change 改变时间轴长度，导致 block 对不齐。
 - pitch shift 改变频率结构，导致原先选择的 mel band/group 关系发生偏移。
 - 当前只做小范围 shift alignment，不能完全修复这种时间/频率同步破坏。
@@ -557,7 +589,7 @@ random2000，无攻击扩展：
 
 因此论文中应主动承认：
 
-> RelMel 的主要边界不是常规压缩或噪声，而是强时间/频率同步破坏。未来可通过 multi-scale alignment（多尺度对齐）、DTW（动态时间规整）或 pitch-aware matching（变调感知匹配）增强。
+> RAWMER 的主要边界不是常规压缩或噪声，而是强时间/频率同步破坏。未来可通过 multi-scale alignment（多尺度对齐）、DTW（动态时间规整）或 pitch-aware matching（变调感知匹配）增强。
 
 ## 19. 指标解释
 
@@ -632,9 +664,9 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 2. 完全 blind watermarking 很重要，但平台侧 verification 是另一个现实设定。
 3. 在 TTS 场景中，mel 是自然的嵌入层，reference mel 可以被平台保存。
 4. MelShield 证明了 mel-domain reference-assisted watermarking 可行，但绝对扰动模式在强噪声下不够稳。
-5. RelMel 将 payload 编码为 block-wise relative mel energy relations。
+5. RAWMER 将 payload 编码为 block-wise relative mel energy relations。
 6. Reliable pair selection 使用 clean mel reference 选择稳定、平衡的正负频带组。
-7. 实验显示 RelMel 在 HiFi-GAN 和 DiffWave 上都显著提升加性噪声鲁棒性。
+7. 实验显示 RAWMER 在 HiFi-GAN 和 DiffWave 上都显著提升加性噪声鲁棒性。
 8. 负控实验说明不会对错误 key/payload/reference 过度通过。
 9. Reference 压缩说明实际存储可行。
 10. 片段和盲搜索实验说明可处理局部片段。
@@ -660,10 +692,10 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 不要写：
 
-- RelMel 是 blind watermarking。
-- RelMel 不需要 reference。
-- RelMel 全面碾压 AudioSeal/WavMark。
-- RelMel 对所有攻击都鲁棒。
+- RAWMER 是 blind watermarking。
+- RAWMER 不需要 reference。
+- RAWMER 全面碾压 AudioSeal/WavMark。
+- RAWMER 对所有攻击都鲁棒。
 - confidence 可以单独判断归属。
 - 32 bit 必须全对才算通过。
 - PESQ 3.5 是某篇原文严格规定的通用标准。
@@ -671,7 +703,7 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 应该写：
 
-- RelMel 是 reference-assisted verification 方法。
+- RAWMER 是 reference-assisted verification 方法。
 - 它适合平台侧 provenance verification 和 forensic attribution。
 - 它在强加性噪声下相比质量匹配 MelShield 有明显优势。
 - 它和 AudioSeal/WavMark 属于不同范式，优势主要体现在本文的 reference-assisted TTS setting 下。
@@ -681,8 +713,8 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 主文建议优先放：
 
-1. RelMel vs MelShield 主对比表，覆盖 HiFi-GAN 和 DiffWave。
-2. RelMel 全攻击表，至少放 HiFi-GAN/DiffWave 摘要。
+1. RAWMER vs MelShield 主对比表，覆盖 HiFi-GAN 和 DiffWave。
+2. RAWMER 全攻击表，至少放 HiFi-GAN/DiffWave 摘要。
 3. AudioSeal/WavMark waveform baseline 摘要。
 4. Reference false positive random2000 表。
 5. Reference compression 表，突出 22KB band_uint8。
@@ -702,11 +734,11 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 后续最有价值的方向：
 
-1. 将主方法和关键 MelShield 对照扩到 random2000，提高统计说服力。
-2. 尝试 AudioMarkBench 或 RAW-Bench 兼容攻击协议，增强 benchmark 认可度。
-3. 加入 neural codec 攻击，如 EnCodec、DAC、SoundStream。
-4. 在 LibriSpeech 或 Common Voice 上补一个跨数据集验证。
-5. 为 speed/pitch 引入更强 alignment，再验证是否能修复同步破坏。
+1. 尝试 AudioMarkBench 或 RAW-Bench 兼容攻击协议，增强 benchmark 认可度。
+2. 加入 neural codec 攻击，如 EnCodec、DAC、SoundStream。
+3. 在 LibriSpeech 或 Common Voice 上补一个跨数据集验证。
+4. 为 speed/pitch 引入更强 alignment，再验证是否能修复同步破坏。
+5. 如版面允许，可把 reference 压缩和 blind fragment verification 也扩到 random2000 作为补充材料。
 
 不建议把所有 pilot 或消融都扩到 random2000，因为边际收益较低。
 
@@ -715,7 +747,7 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 如果让另一个 AI 基于本文档写 abstract 或 introduction，应告诉它：
 
 - 这篇论文的设定是 reference-assisted，不是 blind。
-- 方法名是 RelMel，可以解释为 Relative Mel-Energy Relations。
+- 方法名是 RAWMER，完整标题是 “RAWMER: Reference-Assisted Speech Watermarking via Relative Mel-Energy Relations”；RelMel 是代码和早期实验中的内部简称。
 - 核心创新是相对能量关系和可靠候选对选择。
 - 主优势是强加性噪声下鲁棒性提升。
 - 关键实验证据包括跨 HiFi-GAN/DiffWave、MelShield 对照、AudioSeal/WavMark 对比、负控、reference 压缩、盲片段验证。
@@ -726,5 +758,4 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 如果只允许用一段话介绍本工作，可以写：
 
-> RelMel is a reference-assisted mel-domain watermarking method for neural speech provenance verification. Instead of encoding payload bits as absolute perturbation patterns, it embeds them as relative energy relations between reliable positive and negative mel-bin groups across repeated time blocks. With a clean mel reference retained by the service provider, RelMel verifies whether a suspect audio clip matches a claimed payload, key, and generation record. Experiments on LJSpeech with HiFi-GAN and DiffWave show that RelMel substantially improves additive-noise robustness over quality-matched MelShield, remains competitive under common signal-processing attacks, produces low false positives under wrong-key/payload/reference controls, supports compressed references of about 22KB per utterance, and can verify partial clips via blind reference search. Its current main limitation is strong time/frequency synchronization distortion such as large speed changes and pitch shifts.
-
+> RAWMER is a reference-assisted mel-domain watermarking method for neural speech provenance verification. Instead of encoding payload bits as absolute perturbation patterns, it embeds them as relative energy relations between reliable positive and negative mel-bin groups across repeated time blocks. With a clean mel reference retained by the service provider, RAWMER verifies whether a suspect audio clip matches a claimed payload, key, and generation record. Experiments on LJSpeech with HiFi-GAN and DiffWave show that RAWMER substantially improves additive-noise robustness over quality-matched MelShield, remains competitive under common signal-processing attacks, produces low false positives under wrong-key/payload/reference controls, supports compressed references of about 22KB per utterance, and can verify partial clips via blind reference search. Its current main limitation is strong time/frequency synchronization distortion such as large speed changes and pitch shifts.

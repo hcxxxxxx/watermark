@@ -1,0 +1,528 @@
+==================================================================
+RAWMER: Reference-Assisted Speech Watermarking via
+Relative Mel-Energy Relations
+==================================================================
+(Draft for ICASSP 2027 -- 4 pages text + 1 page references)
+
+
+------------------------------------------------------------------
+ABSTRACT
+------------------------------------------------------------------
+Neural text-to-speech and voice cloning create a pressing need to verify
+whether a suspect utterance originates from a given generation service. We
+target a reference-assisted setting in which the provider retains a compact
+reference of the clean mel spectrogram at generation time and later checks
+whether a suspect clip matches a claimed payload, key, and record. Within this
+setting, prior mel-domain watermarking encodes the payload as an absolute
+perturbation pattern whose residual is fragile under strong additive noise. We
+propose RAWMER, which instead encodes each payload bit as a relative energy
+relation between two reliable groups of mel bins within short time blocks, so
+that detection relies on a differential score that cancels common-mode
+distortion. A reliability-aware selection picks boundary-safe, energy-stable,
+and balanced bin pairs from the clean reference, and the payload is embedded
+redundantly across blocks for robust voting. On LJSpeech with HiFi-GAN and
+DiffWave, RAWMER attains 0.9999/0.9998 bit accuracy on clean watermarked speech
+(PESQ 3.51/3.54) and, at quality matched to a re-implemented MelShield baseline,
+improves 5 dB-SNR accuracy from 0.6328 to 0.8587 under HiFi-GAN and from
+0.7173 to 0.8308 under DiffWave. Negative
+controls yield <= 0.4% false verification for wrong key/payload/reference,
+references compress to about 22 KB per utterance, and 25% clips remain
+verifiable under blind crop search. The main limitation is strong
+time/frequency desynchronization such as large speed or pitch changes.
+
+
+------------------------------------------------------------------
+I. INTRODUCTION
+------------------------------------------------------------------
+Modern text-to-speech (TTS), voice conversion, and voice cloning systems now
+synthesize speech that is difficult to distinguish from genuine recordings.
+This realism enables fraud, impersonation, and misinformation, and motivates
+mechanisms that let a provider establish the provenance of audio attributed to
+its service [REF: synthetic-speech-risk]. Plain metadata is easily stripped and
+cannot serve as reliable evidence of origin. Audio watermarking, which embeds an
+imperceptible payload that survives later processing, has therefore become a
+central tool for provenance attribution and forensic auditing of generated
+speech [REF: audioseal, wavmark].
+
+Much of the watermarking literature pursues blind detection: given only a
+suspect clip, a detector decides whether a watermark is present and recovers its
+payload without any side information. Blind detection is general and valuable,
+but it is also demanding, and detector-based recovery tends to degrade sharply
+under strong additive noise or aggressive compression. We instead study a
+complementary and practically common setting, reference-assisted verification.
+A TTS service already logs request information such as utterance identifiers,
+speaker and model versions, and generation configurations; it can additionally
+retain a compact reference of the clean mel spectrogram produced at generation
+time. Given a suspect clip, the provider then asks a focused question: does this
+audio originate from a specific generation record and carry the claimed payload?
+Here the verifier is the service itself rather than an anonymous third party,
+which makes the retained reference a deliberate system assumption rather than
+hidden side information. This setting fits provenance verification, forensic
+attribution, and audit, where false attribution must be tightly controlled.
+
+The mel spectrogram is a natural place to watermark in this setting. In a
+typical neural pipeline, text is mapped to a mel spectrogram by an acoustic
+model and then to a waveform by a vocoder such as HiFi-GAN [REF: hifigan] or
+DiffWave [REF: diffwave]. Embedding in the mel domain places the watermark
+before the vocoder, aligns perturbations with a perceptually motivated frequency
+scale, and lets the watermark propagate to the waveform through different
+vocoders. It also pairs naturally with reference-assisted verification: if the
+provider stores the clean mel, a suspect clip can be re-analyzed and compared
+against the reference to form a residual from which the payload is recovered.
+MelShield [REF: melshield] demonstrates that mel-domain, reference-assisted
+watermarking is feasible. However, it encodes each bit as an absolute
+perturbation pattern and detects it by correlating the residual with a
+key-driven pattern. Absolute residuals are sensitive to overall gain, frequency
+shaping, and vocoder reconstruction error, and in practice MelShield loses
+substantial bit accuracy under strong additive noise.
+
+Our central observation is that, within a short time block, the relative energy
+relation between two groups of mel bins is more stable than the absolute residual
+of any single bin: many distortions, such as gain changes, mild filtering, and
+local reconstruction bias, act in common on a local mel region and largely
+cancel in a differential measurement. We propose RAWMER, which encodes each
+payload bit as the sign of an energy difference between a positive and a negative
+group of mel bins, repeated across time blocks. Detection compares the residual
+energy of the two groups rather than reading any single bin, and a
+reliability-aware selection uses the clean reference to choose bin pairs that are
+boundary-safe, energy-stable, and balanced between the two groups.
+
+We make the following contributions:
+
+(1) Relative mel-energy watermarking. We formulate speech watermarking as
+block-wise relative energy relations between mel-bin groups rather than absolute
+perturbation patterns, yielding a differential detection score that is robust to
+common-mode distortion.
+
+(2) Reliability-aware pair selection. We use the clean mel reference to select
+boundary-safe, energy-stable, and balanced positive/negative bin pairs from
+multiple candidates, which we show is the main source of the robustness gain
+under strong additive noise.
+
+(3) A systematic study of the reference-assisted setting. Across HiFi-GAN and
+DiffWave, RAWMER improves additive-noise robustness over a quality-matched
+MelShield re-implementation, while negative controls, reference compression to
+about 22 KB per utterance, and blind partial-clip verification show that the
+setting is sound and practical. We also report a candid comparison with
+waveform-domain baselines (AudioSeal, WavMark) and disclose the main
+limitation, strong time/frequency desynchronization.
+
+
+------------------------------------------------------------------
+II. PROPOSED METHOD
+------------------------------------------------------------------
+
+A. Problem Setting: Reference-Assisted Verification
+----------------------------------------------------
+At generation time, the provider holds a clean mel spectrogram
+M in R^{F x T}, min-max normalized to [0,1], where F is the number of mel bins
+and T the number of frames.
+For each utterance it draws a payload b in {0,1}^L of L bits, derived
+deterministically from an utterance identifier and a secret key. The secret key
+is kept in protected verifier state, while the retained reference record stores
+the utterance identifier, a payload commitment or recomputable payload metadata,
+and a (possibly compressed) copy of the clean mel M. RAWMER embeds b into M to
+produce a watermarked mel M_hat, which a vocoder G renders to the released
+waveform x_hat = G(M_hat).
+
+Verification is payload-specific rather than mere presence detection. Given a
+suspect clip y, the verifier recovers the expected payload b from the
+identifier and key, re-analyzes y to a mel M_y, and forms the residual against
+the retained reference,
+
+        R = M_y - M,                                                   (1)
+
+from which it decodes b_hat. Writing the bit accuracy as
+acc = (1/L) sum_i 1[b_hat_i = b_i], the clip is verified if acc >= tau for a
+threshold tau. Attribution is decided by this payload match, not by signal
+strength alone, so a correct decision requires the correct combination of key,
+payload, and reference. The threshold is set below 1 (we use tau = 0.75) to
+tolerate the few bit errors expected under strong distortion, while the negative
+controls of Section III show that wrong key/payload/reference still fail.
+
+B. Relative Mel-Energy Encoding
+-------------------------------
+Rather than writing a bit as the presence of an expected absolute perturbation,
+RAWMER writes it as the sign of an energy difference between two groups of mel
+bins. The time axis is partitioned into blocks of W frames with stride W
+(non-overlapping; W = 8 frames in our configuration), and embedding is confined
+to a watermark band of mel bins [f_lo, f_hi) (we use bins 20-60 of 80). Each
+block carries K payload bits (K = 6), so a single block contributes a small,
+redundant slice of the full payload.
+
+For a given bit assigned to a block, RAWMER selects two disjoint sets of mel
+bins within the band, a positive group P and a negative group N, each of size p
+(p = 6). The bit is embedded by pushing the two groups in opposite directions
+inside the block region B (the W frames by the bins of P and N):
+
+  - to embed 1: raise the energy of P and lower the energy of N;
+  - to embed 0: lower the energy of P and raise the energy of N.
+
+Perturbations are scaled by a strength alpha and constrained by a spectral mask
+(floor mask_floor) and a boundary margin so that the modified mel stays within
+its admissible range and audible damage is limited.
+
+At detection, RAWMER does not inspect any single bin in M_y; it reads the
+residual R of (1), removes its global mean (R <- R - mean(R)) to discard any
+uniform offset between the suspect and the reference, and compares the two
+groups,
+
+        s \propto mean_{(f,t) in P x B} R(f,t)
+              - mean_{(f,t) in N x B} R(f,t).                          (2)
+
+In the implementation, this comparison is computed as the mean inner product
+between the block residual and a signed, unit-normalized pair vector, whose
+positive entries correspond to P and negative entries correspond to N.
+
+A positive score s favors bit 1, a negative score favors bit 0. Because s is a
+difference of two co-located group means computed on a DC-removed residual, any
+distortion that acts in common on the local block region -- a gain change, mild
+filtering, or a slowly varying vocoder reconstruction bias -- shifts both terms
+together and largely cancels, leaving the embedded directional offset. This
+differential measurement is the source of RAWMER's robustness relative to
+absolute-pattern detection.
+
+C. Reliability-Aware Pair Selection
+-----------------------------------
+Not every pair of bin groups is equally trustworthy. Bins with very low energy
+are easily ignored by the vocoder or buried by noise; bins already close to the
+admissible boundary cannot be pushed further without clipping or mask
+truncation; and if P and N differ greatly in reliability, the score s becomes
+biased. RAWMER therefore does not commit to a single random pair. For each
+bit/block it generates C candidate pairs (C = 16) and scores them against the
+clean reference using two notions of reliability:
+
+  - Boundary reliability: bins farther from the admissible upper/lower bound can
+    absorb the intended perturbation with less clipping and less audible damage.
+  - Energy reliability: bins carrying nontrivial speech energy propagate the
+    perturbation through the vocoder more stably than near-silent bins.
+
+The goal is not to pick the loudest bins but to pick a pair in which both groups
+are reliable and the two are balanced against each other. With rel(P) and rel(N)
+the mean reliabilities of the two groups, a candidate is scored as
+
+  score = min(rel(P), rel(N)) - 0.25 * | rel(P) - rel(N) |,           (3)
+
+so that a pair reliable on both sides is preferred over one that is strong on
+one side and weak on the other, and the most reliable candidate is selected for
+embedding. Here reliability combines a boundary term, proportional to the
+headroom min(M, 1-M) of a bin toward its admissible bounds, and an energy term
+that grows with the bin's speech energy. As shown in Section III, increasing C
+from 1 to 16 is the single largest contributor to additive-noise robustness, at
+negligible cost in clean speech quality.
+
+D. Block-Wise Embedding and Voting
+----------------------------------
+The payload is not written once but distributed redundantly across many time
+blocks, and the per-block evidence is aggregated at detection. This block-wise
+design has several consequences that matter for forensic use. It resists local
+corruption, since blocks spared by noise, echo, or cropping still carry the
+payload; it supports partial-clip verification, since any fragment retaining
+enough blocks can be decoded; and it stabilizes the decision through voting,
+since averaging many noisy per-block scores yields a more reliable bit estimate
+than any single block. For each payload bit, the signed scores of (2) from all
+blocks that encode it are accumulated into a vote, and the sign of the
+accumulated vote gives the decoded bit b_hat_i. When only a fragment is
+available and its offset in the reference is unknown, the verifier slides the
+fragment over the reference (search step of 4 frames) and keeps the alignment
+that maximizes agreement, which Section III shows localizes the crop to within
+about one mel frame.
+
+
+------------------------------------------------------------------
+III. EXPERIMENTS
+------------------------------------------------------------------
+
+A. Experimental Setup
+---------------------
+Dataset and vocoders. We evaluate on LJSpeech, embedding watermarks in the mel
+domain and rendering waveforms with two vocoders, HiFi-GAN [REF: hifigan] and
+DiffWave [REF: diffwave], so that robustness is measured across distinct
+synthesis mechanisms. The main RAWMER/MelShield comparison uses 2000 random
+utterances with seed 2026; waveform-domain baselines and ablations use 500
+utterances unless stated otherwise. Mel spectrograms use F = 80 bins, and the
+watermark band is bins 20-60.
+
+Configuration. The payload is L = 32 bits and the verification threshold is
+tau = 0.75. RAWMER uses blocks of W = 8 frames with stride 8, K = 6 bits per
+block, group size p = 6, and C = 16 reliability-ranked candidates per bit.
+The embedding strength is alpha = 0.435 for HiFi-GAN and alpha = 0.35 for
+DiffWave, with mask floor 0.20 and boundary margin 0.01; the DiffWave sampler
+uses a fixed seed.
+
+Metrics. We report bit accuracy (ACC), the per-bit match between the decoded and
+expected payload, and verification rate (VR), the fraction of clips with
+ACC >= tau. Watermark imperceptibility is measured by PESQ and STOI of the
+watermarked (or attacked) audio against an unwatermarked benchmark; we control
+imperceptibility through the no-attack PESQ. Note that PESQ under strong
+additive noise is low by construction, as the attack itself heavily degrades the
+signal.
+
+Baselines. MelShield [REF: melshield] is the closest baseline: mel-domain and
+reference-assisted, but built on absolute perturbation patterns. We compare
+against it in two ways. We cite the values reported in the MelShield paper as an
+external reference, and we additionally re-implement and tune it to match 
+RAWMER's clean PESQ, so that the two methods are compared
+under one code base, vocoder, attack set, and metric. The reported and
+re-implemented numbers are kept separate and never merged into a single
+"fair" protocol. AudioSeal [REF: audioseal] and WavMark [REF: wavmark] are strong
+waveform-domain baselines of a different paradigm; we report them separately
+(Section III-C) and do not treat them as same-protocol comparisons, since they
+embed 16-bit payloads on the waveform whereas the mel-domain methods embed
+32 bits.
+
+B. Robustness vs. MelShield
+---------------------------
+Table 1 reports the main comparison against MelShield across both vocoders. On
+clean watermarked speech, RAWMER reaches ACC 0.9999 (HiFi-GAN, PESQ 3.51) and
+0.9998 (DiffWave, PESQ 3.54) with VR 1.000, on par with MelShield's clean
+accuracy. The difference appears under strong additive noise. For DiffWave, at
+clean PESQ matched almost exactly (RAWMER 3.5419 vs. MelShield 3.5475), RAWMER
+improves accuracy from 0.9661 to 0.9898 at 20 dB SNR, from 0.8180 to 0.9194 at
+10 dB, and from 0.7173 to 0.8308 at 5 dB -- gains of 2.4, 10.1, and 11.3
+percentage points. The HiFi-GAN comparison shows the same trend: at PESQ 3.51,
+RAWMER attains 0.9942/0.9408/0.8587 at 20/10/5 dB, against a quality-matched
+re-implementation at 0.9028/0.7129/0.6328 (PESQ 3.51). The MelShield paper's
+reported figures, included in Table 1 as an external reference, follow a similar
+pattern of degradation at 10 and 5 dB. Under non-noise attacks (MP3, AAC,
+scaling, resampling, band-/low-pass, echo), both methods remain at or near VR
+1.000, so the relative-energy formulation does not trade away common-attack
+robustness to gain additive-noise robustness.
+
+  TABLE 1. RAWMER vs. MelShield: clean PESQ and bit accuracy under additive
+  noise (LJSpeech). "reported" = values from the MelShield paper (external
+  reference, PESQ not directly matched); "re-impl." = our quality-matched
+  re-implementation under the same protocol.
+
+  Vocoder   Method                 Clean PESQ   none    noise20  noise10  noise5
+  --------  ---------------------  ----------   ------  -------  -------  ------
+  HiFi-GAN  MelShield (reported)        --      1.0000  1.0000   0.7815   0.7052
+  HiFi-GAN  MelShield (re-impl.)      3.5100    0.9993  0.9028   0.7129   0.6328
+  HiFi-GAN  RAWMER (ours)             3.5141    0.9999  0.9942   0.9408   0.8587
+  DiffWave  MelShield (reported)        --      1.0000  0.9834   0.7788   0.7006
+  DiffWave  MelShield (re-impl.)      3.5475    0.9998  0.9661   0.8180   0.7173
+  DiffWave  RAWMER (ours)             3.5419    0.9998  0.9898   0.9194   0.8308
+
+  All RAWMER/re-impl. rows: 2000 utterances; VR = 1.000 on clean speech.
+
+C. Comparison with Waveform-Domain Baselines
+--------------------------------------------
+AudioSeal and WavMark belong to a different paradigm -- post-hoc waveform
+watermarking with detector- or decoder-based recovery of a 16-bit payload -- so
+Table 2 is a cross-paradigm reference rather than a same-protocol comparison.
+Both baselines are very strong on non-noise attacks and introduce little clean
+quality loss (clean PESQ above 4.0). Under strong additive noise, however, their
+verification collapses. AudioSeal keeps high message bit accuracy at 20 dB
+(0.9736 on HiFi-GAN) but its detector rejects most clips, giving VR 0.304
+(HiFi-GAN) and 0.138 (DiffWave), and VR 0.000 at 10 and 5 dB. WavMark, reported
+with forced decoding, falls to near-chance accuracy at 10/5 dB (0.5114/0.4926 on
+HiFi-GAN), and its high-level decode rate is essentially zero under these noise
+levels. Thus, within our reference-assisted setting and under strong additive
+noise, RAWMER verifies far more reliably than these waveform baselines, while we
+do not claim superiority on the non-noise attacks or clean quality where they
+remain strong.
+
+  TABLE 2. Waveform-domain baselines (16-bit payload) under additive noise:
+  bit accuracy / verification rate. Cross-paradigm reference; 500 utterances.
+
+  Vocoder   Method            Clean PESQ   noise20        noise10        noise5
+  --------  ----------------  ----------   ------------   ------------   ------------
+  HiFi-GAN  AudioSeal         4.4574       0.9736/0.304   0.7900/0.000   0.6465/0.000
+  HiFi-GAN  WavMark (forced)  4.2975       0.7523/0.630   0.5114/0.046   0.4926/0.034
+  DiffWave  AudioSeal         4.4225       0.9659/0.138   0.7544/0.000   0.6175/0.000
+  DiffWave  WavMark (forced)  4.0211       0.6700/0.376   0.5120/0.034   0.4978/0.046
+
+D. Validating the Reference-Assisted Setting
+--------------------------------------------
+A reference-assisted method must show that it does not pass for an arbitrary
+reference, and that retaining references is practical. Table 3 summarizes three
+studies on HiFi-GAN.
+
+False positives. We run negative controls on 2000 utterances with no attack.
+The correct combination of reference, key, and payload verifies at VR 1.000
+(ACC 0.9999), whereas unmarked audio, a wrong key, a wrong payload, and a wrong
+reference all drop to chance accuracy (ACC ~ 0.50) with VR of 0.40%, 0.15%,
+0.40%, and 0.35%, respectively. Notably, the wrong-payload control retains a
+confidence value equal to the positive case yet fails verification, confirming
+that attribution must rest on payload match rather than signal strength alone.
+
+Reference compression. Storing the full float32 mel costs 176.72 KB per
+utterance. Quantizing only the watermark band (bins 20-60) to 8 bits reduces
+this to about 22 KB -- one eighth of the cost -- while preserving robustness:
+ACC/VR of 0.9941/1.000, 0.9399/0.992, and 0.8574/0.920 at 20/10/5 dB,
+essentially matching the float32 reference. This makes per-utterance reference
+storage realistic for a service provider.
+
+Blind partial-clip verification. To avoid assuming a known crop position, the
+verifier slides each fragment over the reference (search step 4 frames) and
+keeps the best-scoring alignment. A 25% fragment still verifies at ACC
+0.985-0.991 with VR 0.998-1.000, and a 50% fragment at ACC >= 0.997 with VR
+1.000; the recovered crop offset has a median error of about one mel frame.
+Block-wise redundancy thus distributes watermark evidence evenly enough to
+support short, unaligned clips.
+
+  TABLE 3. Validating the reference-assisted setting on HiFi-GAN.
+  (a) Negative controls, no attack, 2000 utterances (ACC / VR).
+      correct          0.9999 / 1.0000
+      clean unmarked   0.5008 / 0.0040
+      wrong key        0.5030 / 0.0015
+      wrong payload    0.5000 / 0.0040
+      wrong reference  0.4991 / 0.0035
+  (b) Reference compression, 500 utterances (size; ACC/VR at noise5).
+      float32          176.72 KB   0.8593 / 0.918
+      band_uint8        22.09 KB   0.8574 / 0.920
+  (c) Blind fragment verification, 500 utterances (ACC / VR).
+      25% clip         0.985-0.991 / 0.998-1.000
+      50% clip         >= 0.997    / 1.000
+
+E. Ablation and Limitations
+---------------------------
+Pair selection. Table 4 isolates the effect of reliability-aware selection on
+HiFi-GAN. Increasing the candidate count C from 1 (a single random pair) to 16
+raises noise robustness sharply -- by 4.9, 17.7, and 19.2 points at 20/10/5 dB
+-- while clean PESQ drops only from 3.5485 to 3.5102. Reliability-aware pair
+selection is therefore the principal source of RAWMER's additive-noise
+robustness, at negligible perceptual cost. Across seeds 2026-2028 the main
+configuration is stable (noise5 ACC 0.8607/0.8588/0.8574).
+
+  TABLE 4. Pair-candidate ablation on HiFi-GAN, 500 utterances.
+
+  C    Clean PESQ   none    noise20  noise10  noise5
+  ---  ----------   ------  -------  -------  ------
+  1    3.5485       0.9999  0.9459   0.7674   0.6684
+  4    3.5299       0.9999  0.9873   0.8894   0.7845
+  8    3.5184       0.9999  0.9918   0.9232   0.8315
+  16   3.5102       0.9999  0.9952   0.9439   0.8607
+
+Robustness scope and limitations. Beyond the common attacks of Table 1, RAWMER
+stays robust under modern operations: low-bitrate MP3/AAC, 2 kHz low-pass, wide
+band-pass, amplitude clipping, 8-bit quantization, and strong reverberation all
+keep VR at 1.000 on both vocoders. Two boundaries remain. Extreme 0 dB additive
+noise lowers VR to 0.486-0.598. More importantly, RAWMER is sensitive to
+time/frequency desynchronization: detection relies on frame-level alignment
+between the suspect and reference mels, so large speed changes and pitch shifts
+misalign the blocks and shift the chosen bin relations. Mild distortions are
+tolerated -- pitch shifts within +/-50 cents keep ACC above 0.995 and VR 1.000,
+and +/-3% speed keeps VR above 0.99 -- but a one-semitone (+/-100 cents) shift
+drops ACC to about 0.78, and +/-10% speed drops VR below 0.33. The dominant
+failure mode is not loss of watermark energy but broken synchronization, which
+points to multi-scale alignment, dynamic time warping, or pitch-aware matching
+as future work.
+
+
+------------------------------------------------------------------
+IV. CONCLUSION
+------------------------------------------------------------------
+We presented RAWMER, a reference-assisted mel-domain watermarking method for
+provenance verification of neural speech. Rather than encoding payload bits as
+absolute perturbation patterns, RAWMER writes them as relative energy relations
+between reliability-selected groups of mel bins across repeated time blocks, and
+detects them with a differential, DC-removed score that cancels common-mode
+distortion. On LJSpeech with HiFi-GAN and DiffWave, RAWMER substantially
+improves additive-noise robustness over a quality-matched MelShield
+re-implementation while remaining strong under common signal-processing attacks.
+A systematic study of the setting -- low false verification under
+wrong-key/payload/reference controls, compact ~22 KB references, and blind
+partial-clip verification -- indicates that reference-assisted verification is
+both sound and practical for provider-side attribution. The main limitation is
+strong time/frequency desynchronization, such as large speed or pitch changes;
+addressing it through multi-scale alignment, dynamic time warping, or
+pitch-aware matching is our primary direction for future work.
+
+
+------------------------------------------------------------------
+V. REFERENCES
+------------------------------------------------------------------
+NOTE: [1] MelShield could not be verified online (arxiv.org was unreachable in
+this environment). Please complete the author list / venue before submission.
+The bracket tags used in the body map to the numbers below:
+  [REF: synthetic-speech-risk] -> [11]/[12]   [REF: audioseal] -> [3]
+  [REF: wavmark] -> [4]   [REF: hifigan] -> [5]   [REF: diffwave] -> [6]
+  [REF: melshield] -> [1]
+
+[1]  [Authors TBD], "MelShield: Robust Mel-Domain Audio Watermarking for
+     Provenance Attribution of AI-Generated Synthesized Speech," arXiv preprint
+     arXiv:2605.01515, 2026.
+
+[2]  J. Zhou, J. Yi, T. Wang, J. Tao, Y. Bai, C. Y. Zhang, Y. Ren, and Z. Wen,
+     "TraceableSpeech: Towards proactively traceable text-to-speech with
+     watermarking," arXiv preprint arXiv:2406.04840, 2024.
+
+[3]  R. San Roman, P. Fernandez, H. Elsahar, A. Defossez, T. Furon, and T. Tran,
+     "Proactive detection of voice cloning with localized watermarking," in
+     Proc. Int. Conf. Machine Learning (ICML), vol. 235, 2024.
+
+[4]  G. Chen, Y. Wu, S. Liu, T. Liu, X. Du, and F. Wei, "WavMark: Watermarking
+     for audio generation," arXiv preprint arXiv:2308.12770, 2023.
+
+[5]  J. Kong, J. Kim, and J. Bae, "HiFi-GAN: Generative adversarial networks for
+     efficient and high fidelity speech synthesis," in Proc. Advances in Neural
+     Information Processing Systems (NeurIPS), vol. 33, 2020, pp. 17022-17033.
+
+[6]  Z. Kong, W. Ping, J. Huang, K. Zhao, and B. Catanzaro, "DiffWave: A
+     versatile diffusion model for audio synthesis," in Proc. Int. Conf.
+     Learning Representations (ICLR), 2021.
+
+[7]  K. Ito and L. Johnson, "The LJ Speech dataset,"
+     https://keithito.com/LJ-Speech-Dataset/, 2017.
+
+[8]  A. W. Rix, J. G. Beerends, M. P. Hollier, and A. P. Hekstra, "Perceptual
+     evaluation of speech quality (PESQ) - a new method for speech quality
+     assessment of telephone networks and codecs," in Proc. IEEE Int. Conf.
+     Acoustics, Speech, and Signal Processing (ICASSP), vol. 2, 2001,
+     pp. 749-752.
+
+[9]  C. H. Taal, R. C. Hendriks, R. Heusdens, and J. Jensen, "A short-time
+     objective intelligibility measure for time-frequency weighted noisy
+     speech," in Proc. IEEE Int. Conf. Acoustics, Speech and Signal Processing
+     (ICASSP), 2010, pp. 4214-4217.
+
+[10] J. Shen, R. Pang, R. J. Weiss, M. Schuster, N. Jaitly, Z. Yang, Z. Chen,
+     Y. Zhang, Y. Wang, R. Skerrv-Ryan, R. A. Saurous, Y. Agiomyrgiannakis, and
+     Y. Wu, "Natural TTS synthesis by conditioning WaveNet on mel spectrogram
+     predictions," in Proc. IEEE Int. Conf. Acoustics, Speech and Signal
+     Processing (ICASSP), 2018, pp. 4779-4783.
+
+[11] Z. Wu, E. S. Chng, and H. Li, "Detecting converted speech and natural
+     speech for anti-spoofing attack in speaker recognition," in Proc.
+     Interspeech, 2012.
+
+[12] X. Liu, X. Wang, M. Sahidullah, J. Patino, H. Delgado, T. Kinnunen,
+     M. Todisco, J. Yamagishi, N. Evans, A. Nautsch, and K. A. Lee, "ASVspoof
+     2021: Towards spoofed and deepfake speech detection in the wild,"
+     IEEE/ACM Trans. Audio, Speech, Language Process., vol. 31, pp. 2507-2522,
+     2023.
+
+[13] Y. Ren, C. Hu, X. Tan, T. Qin, S. Zhao, Z. Zhao, and T.-Y. Liu,
+     "FastSpeech 2: Fast and high-quality end-to-end text to speech," in Proc.
+     Int. Conf. Learning Representations (ICLR), 2021.
+
+[14] J. Casanova, J. Weber, C. D. Shulby, A. C. Junior, E. Golge, and
+     M. A. Ponti, "YourTTS: Towards zero-shot multi-speaker TTS and zero-shot
+     voice conversion for everyone," in Proc. Int. Conf. Machine Learning
+     (ICML), 2022, pp. 2709-2720.
+
+[15] C. Liu, J. Zhang, T. Zhang, X. Yang, W. Zhang, and N. Yu, "Detecting voice
+     cloning attacks via timbre watermarking," arXiv preprint arXiv:2312.03410,
+     2023.
+
+[16] G. Chen, Y. Wu, S. Liu, T. Liu, X. Du, and F. Wei, "Robust audio
+     watermarking based on reversible networks," arXiv preprint, 2023.
+
+[17] J. Zhou, J. Yi, Y. Ren, J. Tao, T. Wang, and C. Y. Zhang, "WMCodec:
+     End-to-end neural speech codec with deep watermarking for authenticity
+     verification," arXiv preprint arXiv:2409.12121, 2024.
+
+[18] A. Defossez, J. Copet, G. Synnaeve, and Y. Adi, "High fidelity neural audio
+     compression," arXiv preprint arXiv:2210.13438, 2022.
+
+[19] N. Zeghidour, A. Luebs, A. Omran, J. Skoglund, and M. Tagliasacchi,
+     "SoundStream: An end-to-end neural audio codec," IEEE/ACM Trans. Audio,
+     Speech, Language Process., vol. 30, pp. 495-507, 2021.
+
+[20] P. O'Reilly, A. Bugler, K. Bhandari, M. Morrison, and B. Pardo, "VoiceBlock:
+     Privacy through real-time adversarial attacks with audio-to-audio models,"
+     in Proc. Advances in Neural Information Processing Systems (NeurIPS), 2022.
+
+[21] H. Liu, T. Guo, S. Jin, J. Liu, W. Zhao, and D. Yu, "Detecting and
+     attributing AI-generated speech: A survey," arXiv preprint, 2024.
