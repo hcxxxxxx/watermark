@@ -336,6 +336,17 @@ Reference compression（参考压缩）实验在 random2000 规模上比较了�
 
 这说明 reference-based verification 在平台部署中是可以讲得通的。对平台方来说，约 21.87KB/utterance 的参考信息并不离谱，尤其相比保存完整 wav 或复杂日志而言。
 
+后续 random500 的极限压缩 sweep 又补充了和 MelShield 的对照：
+
+- RAWMER 的 `band_uint8` 约 22.09KB/reference，`noise20/noise10/noise5` 为 0.9941 / 0.9424 / 0.8598。
+- RAWMER 的 `band_uint4` 约 11.05KB/reference，`noise20/noise10/noise5` 仍有 0.9826 / 0.9128 / 0.8245。
+- RAWMER 的 `uint2` 或 `band_uint2` 压到约 11.05KB 或 5.52KB 后会明显崩，说明 2-bit 已经太激进。
+- MelShield 的完整 `uint4` 约 22.09KB/reference 时基本保持自身 float32 水平，但由于 MelShield 原始噪声鲁棒性较弱，`noise20/noise10/noise5` 只有 0.8968 / 0.7103 / 0.6326。
+- MelShield 的完整 `uint2` 约 11.05KB/reference 时进一步降为 0.7859 / 0.6554 / 0.6007。
+- MelShield 的 `band_uint8/band_uint4/band_uint2` 明显退化，说明在当前实现中它更依赖完整 reference 信息；而 RAWMER 更自然地支持只保存水印相关频带。
+
+因此，reference compression 不只是一个工程附录，也可以作为 RAWMER 相对 MelShield 的系统优势之一：RAWMER 的验证信号集中在可指定的相对 mel-energy relations（相对梅尔能量关系）上，所以 reference 可以被裁剪到相关频带并量化，而不必保留完整 clean mel。
+
 ## 13. 与 MelShield 的核心区别
 
 RAWMER 和 MelShield 都是 mel-domain、reference-assisted 方法，但核心区别如下：
