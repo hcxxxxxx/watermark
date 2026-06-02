@@ -39,18 +39,27 @@ COMMON_GRID_ARGS=(
   --vocoder command
   --vocoder-command "$DIFFWAVE_COMMAND"
   --quality-floor 3.5
+  --quality-weight 0.25
+  --keep-candidate-results
+)
+
+RELMEL_GRID_ARGS=(
+  "${COMMON_GRID_ARGS[@]}"
   --noise20-weight 1.0
   --noise10-weight 0.5
   --noise5-weight 0.25
-  --quality-weight 0.25
-  --keep-candidate-results
+)
+
+MELSHIELD_GRID_ARGS=(
+  "${COMMON_GRID_ARGS[@]}"
+  --noise20-weight 1.0
 )
 
 run_step "relmel_diffwave_alpha0352_0355_0358_pesq_edge_random${LIMIT}" \
   python scripts/grid_relmel_ljspeech.py \
     --config configs/relmel_diffwave.yaml \
     --output-dir "runs/relmel_diffwave_alpha0352_0355_0358_pesq_edge_random${LIMIT}" \
-    "${COMMON_GRID_ARGS[@]}" \
+    "${RELMEL_GRID_ARGS[@]}" \
     --alpha-grid 0.352 0.355 0.358 \
     --band-grid 20:60 \
     --mask-floor-grid 0.20 \
@@ -68,7 +77,7 @@ run_step "melshield_diffwave_alpha0061_0064_pesq_edge_random${LIMIT}" \
   python scripts/grid_melshield_ljspeech.py \
     --config configs/melshield_diffwave.yaml \
     --output-dir "runs/melshield_diffwave_alpha0061_0064_pesq_edge_random${LIMIT}" \
-    "${COMMON_GRID_ARGS[@]}" \
+    "${MELSHIELD_GRID_ARGS[@]}" \
     --alpha-grid 0.061 0.062 0.063 0.064 \
     --band-grid 20:60 \
     --mask-floor-grid 0.05 \
