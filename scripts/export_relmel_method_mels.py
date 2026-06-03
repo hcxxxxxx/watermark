@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-mode", choices=["first", "random"], default="random")
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--utterance-id", default=None)
+    parser.add_argument("--select-longest", action="store_true")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--attack-seed", type=int, default=0)
     parser.add_argument("--dpi", type=int, default=300)
@@ -108,8 +110,10 @@ def main() -> None:
         utterance_id=args.utterance_id,
         sample_mode=args.sample_mode,
         seed=args.seed,
+        select_longest=args.select_longest,
     )
     waveform, sample_rate = load_audio(item.wav_path)
+    selected_duration = float(waveform.shape[-1] / sample_rate)
     bundle = frontend.waveform_to_normalized_logmel(waveform, sample_rate)
 
     payload = payload_from_id(relmel_config, item.utterance_id, info_bits)
@@ -129,9 +133,17 @@ def main() -> None:
     watermarked_audio = vocoder.synthesize(torch.from_numpy(watermarked_log_mel))
     vocoder_sr = int(vocoder.sample_rate)
 
+    audio_files: dict[str, str] = {}
     if args.save_audio:
-        save_audio(output_dir / "audio" / "A_clean_vocoder.wav", clean_audio, vocoder_sr)
-        save_audio(output_dir / "audio" / "B_rawmer_watermarked.wav", watermarked_audio, vocoder_sr)
+        a_original_path = output_dir / "audio" / "A_clean_original.wav"
+        a_vocoder_path = output_dir / "audio" / "A_clean_vocoder_reference.wav"
+        b_path = output_dir / "audio" / "B_rawmer_watermarked.wav"
+        save_audio(a_original_path, waveform, sample_rate)
+        save_audio(a_vocoder_path, clean_audio, vocoder_sr)
+        save_audio(b_path, watermarked_audio, vocoder_sr)
+        audio_files["A"] = str(a_original_path)
+        audio_files["A_vocoder_reference"] = str(a_vocoder_path)
+        audio_files["B"] = str(b_path)
 
     spectra: list[tuple[str, str, np.ndarray]] = [
         ("A", "clean", clean_log_mel),
@@ -140,7 +152,9 @@ def main() -> None:
     for label, attack_name in [("C", "noise20"), ("D", "noise10"), ("E", "noise5")]:
         attacked = attack_fns[attack_name](watermarked_audio, vocoder_sr)
         if args.save_audio:
-            save_audio(output_dir / "audio" / f"{label}_{attack_name}.wav", attacked.waveform, attacked.sample_rate)
+            attack_path = output_dir / "audio" / f"{label}_{attack_name}.wav"
+            save_audio(attack_path, attacked.waveform, attacked.sample_rate)
+            audio_files[label] = str(attack_path)
         attacked_bundle = frontend.waveform_to_normalized_logmel(
             attacked.waveform,
             attacked.sample_rate,
@@ -164,6 +178,7 @@ def main() -> None:
     manifest: dict[str, Any] = {
         "utterance_id": item.utterance_id,
         "wav_path": str(item.wav_path),
+        "duration_seconds": selected_duration,
         "output_dir": str(output_dir),
         "config": args.config,
         "vocoder": vocoder_name,
@@ -176,6 +191,7 @@ def main() -> None:
         "mel_config": mel_config.to_dict(),
         "relmel_config": relmel_config.to_dict(),
         "files": {},
+        "audio_files": audio_files,
     }
 
     for label, name, array in spectra:
@@ -198,17 +214,33 @@ def main() -> None:
     with (output_dir / "metadata.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
 
-    print(f"selected {item.utterance_id}")
+    print(f"selected {item.utterance_id} ({selected_duration:.2f}s)")
     print(f"wrote method Mel figures to {output_dir}")
 
 
-def select_ljspeech_item(data_root: Path, utterance_id: str | None, sample_mode: str, seed: int):
+def select_ljspeech_item(
+    data_root: Path,
+    utterance_id: str | None,
+    sample_mode: str,
+    seed: int,
+    select_longest: bool,
+):
     if utterance_id is None:
+        if select_longest:
+            items = list(iter_ljspeech(data_root, sample_mode="first", seed=seed))
+            if not items:
+                raise ValueError(f"No LJSpeech wav files found in {data_root}.")
+            return max(items, key=lambda item: wav_duration_seconds(item.wav_path))
         return next(iter_ljspeech(data_root, limit=1, sample_mode=sample_mode, seed=seed))
     for item in iter_ljspeech(data_root, sample_mode="first", seed=seed):
         if item.utterance_id == utterance_id:
             return item
     raise ValueError(f"Could not find utterance_id={utterance_id!r} in {data_root}.")
+
+
+def wav_duration_seconds(path: Path) -> float:
+    with wave.open(str(path), "rb") as handle:
+        return float(handle.getnframes() / handle.getframerate())
 
 
 def plot_single_logmel(
