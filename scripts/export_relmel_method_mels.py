@@ -46,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--attack-seed", type=int, default=0)
     parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument("--cmap", default="magma")
     parser.add_argument("--save-audio", action="store_true")
     parser.add_argument("--per-image-scale", action="store_true")
 
@@ -76,6 +77,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.cmap not in plt.colormaps():
+        raise ValueError(f"Unknown Matplotlib colormap: {args.cmap}")
     torch.manual_seed(args.attack_seed)
     np.random.seed(args.attack_seed)
 
@@ -187,6 +190,7 @@ def main() -> None:
             "mode": "per_image" if args.per_image_scale else "shared_percentile_1_99",
             "vmin": vmin,
             "vmax": vmax,
+            "cmap": args.cmap,
         },
         "mel_config": mel_config.to_dict(),
         "relmel_config": relmel_config.to_dict(),
@@ -199,7 +203,7 @@ def main() -> None:
         png_path = output_dir / f"{stem}.png"
         npy_path = output_dir / f"{stem}.npy"
         np.save(npy_path, array.astype(np.float32))
-        plot_single_logmel(array, png_path, dpi=args.dpi, vmin=vmin, vmax=vmax)
+        plot_single_logmel(array, png_path, dpi=args.dpi, cmap=args.cmap, vmin=vmin, vmax=vmax)
         manifest["files"][label] = {
             "name": name,
             "png": str(png_path),
@@ -208,7 +212,7 @@ def main() -> None:
         }
 
     panel_path = output_dir / "method_mels_A_to_E_panel.png"
-    plot_panel(spectra, panel_path, dpi=args.dpi, vmin=vmin, vmax=vmax)
+    plot_panel(spectra, panel_path, dpi=args.dpi, cmap=args.cmap, vmin=vmin, vmax=vmax)
     manifest["panel_png"] = str(panel_path)
 
     with (output_dir / "metadata.json").open("w", encoding="utf-8") as handle:
@@ -247,11 +251,12 @@ def plot_single_logmel(
     array: np.ndarray,
     path: Path,
     dpi: int,
+    cmap: str,
     vmin: float | None,
     vmax: float | None,
 ) -> None:
     fig, ax = plt.subplots(figsize=(5.2, 2.4), dpi=dpi)
-    ax.imshow(array, origin="lower", aspect="auto", cmap="magma", vmin=vmin, vmax=vmax)
+    ax.imshow(array, origin="lower", aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_axis_off()
     fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
     fig.savefig(path, bbox_inches="tight", pad_inches=0)
@@ -262,12 +267,13 @@ def plot_panel(
     spectra: list[tuple[str, str, np.ndarray]],
     path: Path,
     dpi: int,
+    cmap: str,
     vmin: float | None,
     vmax: float | None,
 ) -> None:
     fig, axes = plt.subplots(len(spectra), 1, figsize=(5.6, 9.0), dpi=dpi)
     for ax, (label, name, array) in zip(axes, spectra):
-        ax.imshow(array, origin="lower", aspect="auto", cmap="magma", vmin=vmin, vmax=vmax)
+        ax.imshow(array, origin="lower", aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax)
         ax.text(
             0.015,
             0.90,
