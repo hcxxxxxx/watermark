@@ -22,9 +22,9 @@ distortion. A reliability-aware selection picks boundary-safe, energy-stable,
 and balanced bin pairs from the clean reference, and the payload is embedded
 redundantly across blocks for robust voting. On LJSpeech with HiFi-GAN and
 DiffWave, RAWMER attains 0.9999/0.9998 bit accuracy on clean watermarked speech
-(PESQ 3.51/3.54) and, at quality matched to a re-implemented MelShield baseline,
+(PESQ 3.51/3.51) and, at quality matched to a re-implemented MelShield baseline,
 improves 5 dB-SNR accuracy from 0.6328 to 0.8587 under HiFi-GAN and from
-0.7173 to 0.8308 under DiffWave. Negative
+0.7219 to 0.8353 under DiffWave. Negative
 controls yield <= 0.4% false verification for wrong key/payload/reference,
 references compress to about 22 KB per utterance, and 25% clips remain
 verifiable under blind crop search. The main limitation is strong
@@ -50,8 +50,9 @@ treats the intermediate mel as the host signal and embeds a keyed payload via
 low-energy spread-spectrum perturbations before vocoding, so that a provider who
 retains the clean reference mel can later verify ownership without retraining the
 vocoder. This mel-domain, reference-assisted design reports strong robustness
-under common signal-processing distortions -- near-perfect decoding under MP3 and
-AAC compression and over 95% accuracy at 20 dB additive noise -- while preserving
+under common signal-processing distortions -- 99.98% bit accuracy under MP3/AAC
+compression and 96.85% at 20 dB additive noise in our DiffWave
+re-implementation -- while preserving
 perceptual quality. We adopt the same setting: at generation time the provider
 stores a compact clean-mel reference, and given a suspect clip it checks whether
 the clip matches a claimed payload, key, and record.
@@ -232,7 +233,7 @@ watermark band is bins 20-60.
 Configuration. The payload is L = 32 bits and the verification threshold is
 tau = 0.75. RAWMER uses blocks of W = 8 frames with stride 8, K = 6 bits per
 block, group size p = 6, and C = 16 reliability-ranked candidates per bit.
-The embedding strength is alpha = 0.435 for HiFi-GAN and alpha = 0.35 for
+The embedding strength is alpha = 0.435 for HiFi-GAN and alpha = 0.355 for
 DiffWave, with mask floor 0.20 and boundary margin 0.01; the DiffWave sampler
 uses a fixed seed.
 
@@ -261,11 +262,11 @@ B. Robustness vs. MelShield
 ---------------------------
 Table 1 reports the main comparison against MelShield across both vocoders. On
 clean watermarked speech, RAWMER reaches ACC 0.9999 (HiFi-GAN, PESQ 3.51) and
-0.9998 (DiffWave, PESQ 3.54) with VR 1.000, on par with MelShield's clean
+0.9998 (DiffWave, PESQ 3.51) with VR 1.000, on par with MelShield's clean
 accuracy. The difference appears under strong additive noise. For DiffWave, at
-clean PESQ matched almost exactly (RAWMER 3.5419 vs. MelShield 3.5475), RAWMER
-improves accuracy from 0.9661 to 0.9898 at 20 dB SNR, from 0.8180 to 0.9194 at
-10 dB, and from 0.7173 to 0.8308 at 5 dB -- gains of 2.4, 10.1, and 11.3
+clean PESQ matched almost exactly (RAWMER 3.5140 vs. MelShield 3.5149), RAWMER
+improves accuracy from 0.9685 to 0.9904 at 20 dB SNR, from 0.8225 to 0.9218 at
+10 dB, and from 0.7219 to 0.8353 at 5 dB -- gains of 2.2, 9.9, and 11.3
 percentage points. The HiFi-GAN comparison shows the same trend: at PESQ 3.51,
 RAWMER attains 0.9942/0.9408/0.8587 at 20/10/5 dB, against a quality-matched
 re-implementation at 0.9028/0.7129/0.6328 (PESQ 3.51). The MelShield paper's
@@ -286,8 +287,8 @@ robustness to gain additive-noise robustness.
   HiFi-GAN  MelShield (re-impl.)      3.5100    0.9993  0.9028   0.7129   0.6328
   HiFi-GAN  RAWMER (ours)             3.5141    0.9999  0.9942   0.9408   0.8587
   DiffWave  MelShield (reported)        --      1.0000  0.9834   0.7788   0.7006
-  DiffWave  MelShield (re-impl.)      3.5475    0.9998  0.9661   0.8180   0.7173
-  DiffWave  RAWMER (ours)             3.5419    0.9998  0.9898   0.9194   0.8308
+  DiffWave  MelShield (re-impl.)      3.5149    0.9998  0.9685   0.8225   0.7219
+  DiffWave  RAWMER (ours)             3.5140    0.9998  0.9904   0.9218   0.8353
 
   All RAWMER/re-impl. rows: 2000 utterances; VR = 1.000 on clean speech.
 

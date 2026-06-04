@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import torch
 import torchaudio
@@ -20,6 +20,7 @@ class AttackResult:
 
 
 AttackFn = Callable[[torch.Tensor, int], AttackResult]
+_ENCODEC_MODEL_CACHE: dict[str, Any] = {}
 
 
 def identity(waveform: torch.Tensor, sample_rate: int) -> AttackResult:
@@ -182,6 +183,44 @@ def ffmpeg_pitch_cents(cents: float) -> AttackFn:
     return ffmpeg_pitch(2.0 ** (cents / 1200.0))
 
 
+def encodec_codec(bandwidth_kbps: float = 24.0) -> AttackFn:
+    """Round-trip audio through Meta EnCodec at a target bandwidth."""
+
+    def apply(waveform: torch.Tensor, sample_rate: int) -> AttackResult:
+        try:
+            from encodec import EncodecModel
+            from encodec.utils import convert_audio
+        except ImportError as exc:
+            raise RuntimeError(
+                "EnCodec attacks require the optional `encodec` package. "
+                "Install it with `pip install encodec==0.1.1` in the melshield env."
+            ) from exc
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        cache_key = f"24khz:{device.type}"
+        model = _ENCODEC_MODEL_CACHE.get(cache_key)
+        if model is None:
+            model = EncodecModel.encodec_model_24khz()
+            model.to(device)
+            model.eval()
+            _ENCODEC_MODEL_CACHE[cache_key] = model
+        model.set_target_bandwidth(float(bandwidth_kbps))
+
+        x = waveform.detach().cpu().float()
+        if x.ndim == 1:
+            x = x.unsqueeze(0)
+        x = convert_audio(x, sample_rate, model.sample_rate, model.channels)
+        x = x.unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            encoded_frames = model.encode(x)
+            decoded = model.decode(encoded_frames)
+        y = decoded.squeeze(0).detach().cpu().float().clamp(-1.0, 1.0)
+        return AttackResult(y, int(model.sample_rate))
+
+    return apply
+
+
 def build_attacks(names: list[str]) -> dict[str, AttackFn]:
     registry: dict[str, AttackFn] = {
         "none": identity,
@@ -205,6 +244,14 @@ def build_attacks(names: list[str]) -> dict[str, AttackFn]:
         "mp3_64": ffmpeg_codec("mp3", "64k"),
         "aac": ffmpeg_codec("aac", "96k"),
         "aac_48": ffmpeg_codec("aac", "48k"),
+        "encodec24": encodec_codec(24.0),
+        "encodec12": encodec_codec(12.0),
+        "encodec6": encodec_codec(6.0),
+        "encodec3": encodec_codec(3.0),
+        "encodec_24kbps": encodec_codec(24.0),
+        "encodec_12kbps": encodec_codec(12.0),
+        "encodec_6kbps": encodec_codec(6.0),
+        "encodec_3kbps": encodec_codec(3.0),
         "speed095": ffmpeg_filter("atempo=0.95"),
         "speed097": ffmpeg_filter("atempo=0.97"),
         "speed090": ffmpeg_filter("atempo=0.90"),

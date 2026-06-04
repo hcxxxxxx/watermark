@@ -362,14 +362,14 @@ RAWMER 和 MelShield 都是 mel-domain、reference-assisted 方法，但核心�
 
 在 random2000 的 DiffWave 质量匹配主对照中：
 
-- MelShield + DiffWave：干净 PESQ 3.5475
-  - `noise20=0.9661`
-  - `noise10=0.8180`
-  - `noise5=0.7173`
-- RAWMER + DiffWave：干净 PESQ 3.5419
-  - `noise20=0.9898`
-  - `noise10=0.9194`
-  - `noise5=0.8308`
+- MelShield + DiffWave：干净 PESQ 3.5149
+  - `noise20=0.9685`
+  - `noise10=0.8225`
+  - `noise5=0.7219`
+- RAWMER + DiffWave：干净 PESQ 3.5140
+  - `noise20=0.9904`
+  - `noise10=0.9218`
+  - `noise5=0.8353`
 
 在 random2000 的 HiFi-GAN 质量匹配主对照中：
 
@@ -447,7 +447,7 @@ random2000 全攻击结果：
 
 RAWMER + DiffWave 主配置：
 
-- `alpha=0.35`
+- `alpha=0.355`
 - `band=20:60`
 - `mask_floor=0.20`
 - `boundary_margin=0.01`
@@ -456,16 +456,16 @@ RAWMER + DiffWave 主配置：
 
 random2000 全攻击结果：
 
-- `none`：ACC 0.9998，VR 1.000，PESQ 3.5419，STOI 0.9612
-- `noise20`：ACC 0.9898，VR 1.000，PESQ 1.4913，STOI 0.9435
-- `noise10`：ACC 0.9194，VR 0.977，PESQ 1.0782，STOI 0.8927
-- `noise5`：ACC 0.8308，VR 0.861，PESQ 1.0349，STOI 0.8429
+- `none`：ACC 0.9998，VR 1.000，PESQ 3.5140，STOI 0.9604
+- `noise20`：ACC 0.9904，VR 0.9995，PESQ 1.4905，STOI 0.9428
+- `noise10`：ACC 0.9218，VR 0.9825，PESQ 1.0782，STOI 0.8920
+- `noise5`：ACC 0.8353，VR 0.871，PESQ 1.0349，STOI 0.8425
 - 非噪声攻击基本稳定。
 
 补充的 DiffWave 质量边缘复核显示：
 
 - RAWMER `alpha=0.358` 在 random2000 全攻击下 `noise20/noise10/noise5` 为 0.9903 / 0.9231 / 0.8362，但 clean PESQ 为 3.4971，略低于 3.5，因此只能作为质量边界参考。
-- 如果需要进一步贴近 PESQ=3.5 但保持合格，下一步更合理的是补跑 RAWMER `alpha=0.355` 的 random2000 全攻击。
+- RAWMER `alpha=0.355` 在 random2000 全攻击下 clean PESQ 为 3.5140，且 `noise20/noise10/noise5` 为 0.9904 / 0.9218 / 0.8353，因此是当前 DiffWave 主配置。
 
 ### 质量匹配 MelShield 对照
 
@@ -487,7 +487,7 @@ random2000 全攻击结果：
 
 MelShield + DiffWave 本地复现质量匹配配置：
 
-- `alpha=0.060`
+- `alpha=0.061`
 - `band=20:60`
 - `mask_floor=0.05`
 - `energy_gamma=0.75`
@@ -496,14 +496,14 @@ MelShield + DiffWave 本地复现质量匹配配置：
 
 random2000 全攻击结果：
 
-- `none`：ACC 0.9998，VR 1.000，PESQ 3.5475
-- `noise20`：ACC 0.9661，VR 1.000
-- `noise10`：ACC 0.8180，VR 0.969
-- `noise5`：ACC 0.7173，VR 0.862
+- `none`：ACC 0.9998，VR 1.000，PESQ 3.5149
+- `noise20`：ACC 0.9685，VR 0.9995
+- `noise10`：ACC 0.8225，VR 0.9725
+- `noise5`：ACC 0.7219，VR 0.872
 
 与 RAWMER 相比，干净 PESQ 基本匹配，但 RAWMER 在强噪声下更稳。
 
-进一步的质量边缘复核中，MelShield `alpha=0.061`、`band=20:60`、`mask_floor=0.05`、`boundary_margin=0.02` 在 random2000 全攻击下 clean PESQ 为 3.5149，`noise20/noise10/noise5` 为 0.9685 / 0.8225 / 0.7219。这是目前更接近 PESQ=3.5 的质量合格 MelShield + DiffWave baseline，但和 RAWMER `alpha=0.35` 主配置相比仍明显弱。
+进一步的质量边缘复核中，MelShield `alpha=0.061`、`band=20:60`、`mask_floor=0.05`、`boundary_margin=0.02` 在 random2000 全攻击下 clean PESQ 为 3.5149，`noise20/noise10/noise5` 为 0.9685 / 0.8225 / 0.7219。这是目前更接近 PESQ=3.5 的质量合格 MelShield + DiffWave baseline，但和 RAWMER `alpha=0.355` 主配置相比仍明显弱。
 
 ## 16. 负控实验：证明不是假阳性
 
