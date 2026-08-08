@@ -1,0 +1,103 @@
+\begin{thebibliography}{10}
+
+\bibitem{yi2023}
+Jiangyan Yi, Chenglong Wang, Jianhua Tao, Xiaohui Zhang, Chu~Yuan Zhang, and
+  Yan Zhao,
+\newblock ``Audio deepfake detection: A survey,'' 2023,
+\newblock arXiv preprint arXiv:2308.14970.
+
+\bibitem{san2024}
+Robin~San Roman, Pierre Fernandez, Hady Elsahar, Alexandre D{\'e}fossez, Teddy
+  Furon, and Tuan Tran,
+\newblock ``Proactive detection of voice cloning with localized watermarking,''
+\newblock in {\em Proc. 41st International Conference on Machine Learning
+  (ICML)}, 2024, vol. 235 of {\em PMLR}, pp. 43180--43196.
+
+\bibitem{chen2023}
+Guangyu Chen, Yu~Wu, Shujie Liu, Tao Liu, Xiaoyong Du, and Furu Wei,
+\newblock ``Wavmark: Watermarking for audio generation,'' 2023,
+\newblock arXiv preprint arXiv:2308.12770.
+
+\bibitem{singh2024}
+Mayank~Kumar Singh, Naoya Takahashi, Weihsiang Liao, and Yuki Mitsufuji,
+\newblock ``Silentcipher: Deep audio watermarking,''
+\newblock in {\em Proc. Interspeech}, 2024.
+
+\bibitem{liu2024timbre}
+Chang Liu, Jie Zhang, Tianwei Zhang, Xi~Yang, Weiming Zhang, and Nenghai Yu,
+\newblock ``Detecting voice cloning attacks via timbre watermarking,''
+\newblock in {\em Proc. Network and Distributed System Security Symposium
+  (NDSS)}, 2024.
+
+\bibitem{zhou2024}
+Junzuo Zhou, Jiangyan Yi, Tao Wang, Jianhua Tao, Ye~Bai, Chu~Yuan Zhang, Yong
+  Ren, and Zhengqi Wen,
+\newblock ``Traceablespeech: Towards proactively traceable text-to-speech with
+  watermarking,''
+\newblock in {\em Proc. Interspeech}, 2024.
+
+\bibitem{liu2024groot}
+Weizhi Liu, Yue Li, Dongdong Lin, Hui Tian, and Haizhou Li,
+\newblock ``{GROOT}: Generating robust watermark for diffusion-model-based
+  audio synthesis,''
+\newblock in {\em Proc. 32nd ACM International Conference on Multimedia (MM)},
+  2024,
+\newblock arXiv:2407.10471.
+
+\bibitem{kong2020}
+Jungil Kong, Jaehyeon Kim, and Jaekyoung Bae,
+\newblock ``Hifi-gan: Generative adversarial networks for efficient and high
+  fidelity speech synthesis,''
+\newblock in {\em Advances in Neural Information Processing Systems (NeurIPS)},
+  2020.
+
+\bibitem{kong2021}
+Zhifeng Kong, Wei Ping, Jiaji Huang, Kexin Zhao, and Bryan Catanzaro,
+\newblock ``Diffwave: A versatile diffusion model for audio synthesis,''
+\newblock in {\em International Conference on Learning Representations (ICLR)},
+  2021.
+
+\bibitem{jin2026}
+Yutong Jin, Qi~Li, Lingshuang Liu, and Jianbing Ni,
+\newblock ``Melshield: Robust mel-domain audio watermarking for provenance
+  attribution of ai-generated speech,''
+\newblock in {\em Proc. Australasian Conference on Information Security and
+  Privacy (ACISP)}, 2026, pp. 264--284,
+\newblock arXiv:2605.01515.
+
+\bibitem{bender1996}
+Walter Bender, Daniel Gruhl, Norishige Morimoto, and Anthony Lu,
+\newblock ``Techniques for data hiding,''
+\newblock {\em IBM Systems Journal}, vol. 35, no. 3/4, pp. 313--336, 1996.
+
+\bibitem{yeo2003}
+In-Kwon Yeo and Hyoung~Joong Kim,
+\newblock ``Modified patchwork algorithm: A novel audio watermarking scheme,''
+\newblock {\em IEEE Transactions on Speech and Audio Processing}, vol. 11, no.
+  4, pp. 381--386, 2003.
+
+\bibitem{chen2001}
+Brian Chen and Gregory~W. Wornell,
+\newblock ``Quantization index modulation: A class of provably good methods for
+  digital watermarking and information embedding,''
+\newblock {\em IEEE Transactions on Information Theory}, vol. 47, no. 4, pp.
+  1423--1443, 2001.
+
+\bibitem{cox2008}
+Ingemar~J. Cox, Matthew~L. Miller, Jeffrey~A. Bloom, Jessica Fridrich, and Ton
+  Kalker,
+\newblock {\em Digital Watermarking and Steganography},
+\newblock Morgan Kaufmann, 2nd edition, 2008.
+
+\bibitem{ljspeech2017}
+Keith Ito and Linda Johnson,
+\newblock ``The {LJ} {S}peech {D}ataset,''
+  \url{https://keithito.com/LJ-Speech-Dataset/}, 2017.
+
+\bibitem{defossez2022}
+Alexandre D{\'e}fossez, Jade Copet, Gabriel Synnaeve, and Yossi Adi,
+\newblock ``High fidelity neural audio compression,''
+\newblock {\em Transactions on Machine Learning Research (TMLR)}, 2023,
+\newblock arXiv:2210.13438.
+
+\end{thebibliography}

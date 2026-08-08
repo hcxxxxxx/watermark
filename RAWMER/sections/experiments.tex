@@ -1,0 +1,119 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Setup}
+
+We evaluate on LJSpeech~\cite{ljspeech2017} with HiFi-GAN~\cite{kong2020} and
+DiffWave~\cite{kong2021}: $F = 80$ mel bins, $n_{\text{fft}} = 1024$, 22.05~kHz, hop
+256. \texttt{RAWMER} embeds 32 bits with $B = 40$ band bins ($20\!:\!60$),
+$L = S = 8$, $N_b = 6$, $P = 6$, $C = 16$, $\alpha = 0.435$ (HiFi-GAN) / $0.355$
+(DiffWave), $\Delta_{\max} = 12$, $\tau = 0.75$; code will be released. Attacks are MP3/AAC compression, $\pm 8\%$ scaling, 16~kHz resampling,
+300--8000~Hz bandpass / 3~kHz lowpass filtering, additive Gaussian noise at 20/10/5~dB
+SNR, and 80~ms echo. ACC is the fraction of payload bits recovered; VR the fraction of
+utterances with $\text{ACC} \geq \tau$ (24 of 32 bits). PESQ and STOI are computed
+against the \emph{unmarked vocoder output}, isolating embedding from synthesis cost; at
+the matched point clean STOI is 0.969 for both methods on HiFi-GAN (0.960 vs.\ 0.954 on
+DiffWave), so they match on intelligibility too. We use one single-speaker read-English
+corpus with ground-truth mels; end-to-end TTS mels, multi-speaker or expressive speech
+and re-recording are untested gaps we flag, not extrapolate over.
+
+\input{tables/tab_1_main}
+\input{tables/tab_3_compression}
+
+\textbf{Baselines.} We compare against (i) a re-implemented MelShield~\cite{jin2026}
+and (ii) public AudioSeal~\cite{san2024} and WavMark~\cite{chen2023} models as
+cross-paradigm waveform references (16 bits, post-vocoder). Our MelShield shares \texttt{RAWMER}'s frontend, band, payload and $\Delta_{\max}$,
+uses mask floor $0.05$, energy exponent $0.75$, boundary margin $0.02$, zero headroom
+and the calibrated $\tau = 0.61$ of~\cite{jin2026}; only $\alpha$ is tuned to match
+clean PESQ ($0.050$ / $0.061$). MelShield reports ACC 1.000 under
+non-noise attacks and 0.782/0.705 at 10/5~dB on HiFi-GAN, 0.779/0.701 on DiffWave, at
+published points of PESQ\,$\approx$\,4.13 and 3.41~\cite{jin2026}. Ours reproduces
+that signature and, on DiffWave at comparable clean PESQ (3.515 vs.\ 3.408), is
+slightly \emph{stronger} than published (0.823 at 10~dB), so it is not weakened; on
+HiFi-GAN our matched point gives 0.713 against a published 0.782 obtained in a
+higher-quality regime with a differently scaled $\alpha$ ($0.25$, band $20\!:\!55$).
+As $\alpha$ is not comparable across formulations, PESQ matching carries the whole
+comparability burden; an ACC-vs-PESQ curve over an $\alpha$ sweep would remove it.
+
+\subsection{Main Comparison}
+
+Table~\ref{tab:main}a reports robustness at matched clean quality. On HiFi-GAN,
+\texttt{RAWMER} lifts $\text{ACC}_{\text{noise10}}$ from 71.3\% to 94.1\% and
+$\text{ACC}_{\text{noise5}}$ from 63.3\% to 85.9\%; on DiffWave, from 82.3\% to
+92.2\% and 72.2\% to 83.5\%. Non-noise attacks stay at ACC\,$\geq\,$0.983 for all methods and are omitted for
+space. Estimates come from one sampled set; a three-seed check (2026--2028, random 500)
+varies by $\leq 0.002$ at 10 and 5\,dB, far below those gaps. Lacking
+utterance-level confidence intervals, we treat small within-table gaps as
+insignificant.
+
+The waveform rows are context, not baselines to beat: they decode \emph{blindly}
+while our detector reads the exact clean reference, and informed detection is strictly
+easier~\cite{cox2008}. AudioSeal keeps moderate bit accuracy but rejects most noisy
+samples (VR 0.14--0.30 at 20\,dB, zero at 10/5\,dB) and WavMark declines to decode
+$\geq\!95\%$ of them---under heavy noise possibly correct blind behavior, not a
+defect.
+
+\textbf{Matched threshold.} \texttt{RAWMER}'s $\tau = 0.75$ is stricter than the
+$\tau = 0.61$ calibrated in~\cite{jin2026}, so one may ask whether that margin alone
+explains Table~\ref{tab:main}a; Table~\ref{tab:main}b reports VR under both.
+MelShield's VR depends heavily on $\tau$: on HiFi-GAN at $\tau = 0.75$ it collapses to
+0.434 at 10\,dB and 0.127 at 5\,dB, against \texttt{RAWMER}'s 0.991 and 0.918. The
+relaxed threshold is not free---at chance accuracy the binomial false-positive rate is
+0.35\% at $\tau = 0.75$ but 10.8\% at $\tau = 0.61$---so that column is a bit-margin
+diagnostic, not a deployable operating point. We advocate $\tau = 0.75$ and use it for
+all controls below.
+
+\subsection{Reference-Assisted Verification}
+
+\textbf{Negative controls.} On 2000 unattacked HiFi-GAN utterances with the correct
+reference, key and payload, \texttt{RAWMER} passes at $\text{VR} = 1.000$; a wrong
+key, payload or reference gives $\text{ACC} \in [0.499,0.503]$ and
+$\text{VR} \in [0.0015,0.0040]$, matching the 0.35\% binomial tail---the observed
+false positives are what chance alone predicts. Wrong-payload trials retain detector
+\emph{confidence} on par with positives while their decoded bits disagree with the
+claim: verification must hinge on payload match, not confidence.
+
+\textbf{Reference compression.} The stored reference is the band $X_B$, not the full
+mel. Table~\ref{tab:compress}a shows 8-bit quantization of $X_B$ shrinks it to about
+22\,KB while ACC drops by at most 0.0013---$1/8$ of the float32 full-mel row
+(175.0\,KB), or $1/4$ of the tighter float32 band-only baseline (87.5\,KB). The same
+22\,KB on a 4-bit full-mel reference is consistently worse: precision inside the band
+dominates coverage outside it. Under band-only storage our MelShield
+re-implementation degrades far further (0.639/0.577/0.550 at 20/10/5\,dB versus
+0.902/0.713/0.631 with a full float32 reference, random 500), as expected of an
+absolute-residual detector.
+
+\textbf{Blind partial-clip verification.} Because each bit repeats across keyed
+blocks, \texttt{RAWMER} survives cropping. Without revealing the crop offset, a 25\%
+slice from the start, middle or end is slid across the reference (stride 4 frames)
+and the highest-scoring window taken: median start error 0--1 mel frames, ACC
+0.985--0.991, $\text{VR} \geq 0.998$ at all three positions; 50\% clips reach
+$1.000$.
+
+\subsection{Ablation and Robustness Boundary}
+
+\textbf{Which mechanism matters.} Table~\ref{tab:compress}b sweeps $C$: going from
+$C = 1$ to $16$ lifts $\text{ACC}_{\text{noise5}}$ from 66.8\% to 86.1\% at negligible
+PESQ cost, isolating Eq.~\eqref{eq:select} as the dominant contributor. Read honestly,
+differential encoding \emph{alone} ($C = 1$, random pairs) beats quality-matched
+MelShield at 5\,dB, 66.8\% vs.\ 63.3\%, but narrowly; selection supplies the remaining
+19.3 points. We have not run the converse ablation---absolute-residual encoding
+\emph{with} reliability-aware placement---so the differential score's independent
+value rests on $C = 1$ alone.
+
+\textbf{Robustness boundary.} \texttt{RAWMER} withstands 64~kbps MP3, 48~kbps AAC,
+2~kHz lowpass, 8-bit quantization, $\pm 0.5$ clipping, 100~Hz--7~kHz bandpass and
+stronger reverb ($\text{ACC} \geq 0.987$ on both vocoders), plus
+EnCodec~\cite{defossez2022} at 6/12/24~kbps ($\text{ACC} \geq 0.976$ versus
+0.888/0.942/0.954 for quality-matched MelShield on HiFi-GAN): the advantage is not
+confined to Gaussian noise, though noise is where the methods separate most. At 0\,dB
+SNR it degrades gracefully (ACC 0.73--0.75, $\text{VR} \leq 0.60$).
+
+\textbf{Desynchronization is the attack to beat.} The genuine limit is
+time--frequency desynchronization (Table~\ref{tab:compress}c). It arises from the
+bounded-shift alignment of \S\ref{sec:method:det} breaking down, not from watermark
+energy being lost---which is why it is dangerous. A keyless attacker who knows only that
+alignment is frame-level can apply a $\pm 100$-cent shift or $\pm 10\%$ speed change,
+both trivially scriptable and leaving speech intelligible, and will prefer this to
+additive noise. Two keyless attacks are quantified in the supplement: [band-concentrated noise results TBD] and [re-vocoding results TBD]. Restoring
+synchronization (multi-scale search, DTW) is thus a security requirement.

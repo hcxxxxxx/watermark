@@ -1,0 +1,52 @@
+\section{Introduction}
+\label{sec:introduction}
+Modern text-to-speech (TTS) and voice cloning produce speech hard to distinguish
+from genuine recordings, raising risks of fraud, impersonation and
+misinformation~\cite{yi2023} and motivating watermarks that trace audio to its
+source~\cite{san2024,chen2023}. We state up front which part of that problem we
+address. \texttt{RAWMER} is \emph{provider-side}: only the generating provider,
+holding the secret key and a per-utterance reference, can verify, and only for audio
+it generated. It substantiates or refutes an ownership claim about a specific
+candidate generation record; it cannot flag a clone from a non-cooperating system,
+which remains the province of blind detection~\cite{san2024} and deepfake
+classifiers~\cite{yi2023}---the two are complementary
+(\S\ref{sec:method:threat}).
+
+\textbf{Related work.} Post-hoc waveform watermarks such as
+AudioSeal~\cite{san2024}, WavMark~\cite{chen2023} and SilentCipher~\cite{singh2024}
+embed after synthesis and decode blindly. In-generation schemes tie the mark to the pipeline instead: Timbre
+Watermarking~\cite{liu2024timbre} into speaker timbre,
+Trace\-able\-Speech~\cite{zhou2024} into discrete speech tokens,
+Groot~\cite{liu2024groot} into a diffusion generator's noise prior. Since most TTS
+systems emit a mel spectrogram before a vocoder~\cite{kong2020,kong2021}, that mel is
+a shared, model-agnostic interface needing no vocoder retraining.
+MelShield~\cite{jin2026} follows this route, embedding a keyed payload via low-energy
+spread-spectrum perturbations and verifying against a retained clean reference. We
+adopt the same setting and take MelShield---concurrent work, re-implemented
+locally---as our primary baseline.
+
+Our point of departure is the encoding mechanism. MelShield~\cite{jin2026} and prior
+mel-domain schemes represent each bit as an absolute perturbation pattern, detected by
+correlating the reference residual with the keyed pattern. Absolute residuals are
+sensitive to gain, frequency shaping and vocoder reconstruction error; at lower SNRs
+the pattern is buried and bit accuracy falls toward chance. This fragility under
+strong additive noise---not under compression or filtering---is our target.
+
+Our remedy rests on a principle that is not new. Encoding a bit as the sign of an
+energy difference between two keyed sets of host samples is the classical
+\emph{patchwork} construction~\cite{bender1996,yeo2003}, one of a lineage of
+relational and quantization-based embeddings including QIM~\cite{chen2001}; our
+detector is likewise an \emph{informed} one~\cite{cox2008}, since it reads the host.
+Our claim is narrower, and has two parts.
+\textbf{Relative mel-energy encoding before vocoding:} moving patchwork-style
+differential encoding into the pre-vocoder mel domain yields a score $z_i$ in which
+common-mode distortion cancels; alone this already exceeds---narrowly---a
+quality-matched absolute-residual baseline under strong noise.
+\textbf{Reliability-aware bin-group selection:} the clean reference, already required
+here, picks among $C$ keyed candidates the pair whose groups both have dynamic-range
+headroom and stable energy and are balanced in reliability (Eq.~\eqref{eq:select});
+this is the larger contributor. On HiFi-GAN~\cite{kong2020} and
+DiffWave~\cite{kong2021} the combination improves noise robustness over a
+quality-matched MelShield~\cite{jin2026} re-implementation, with chance-level false
+positives, $\approx$\,22~KB references and verification from unaligned 25\% clips.
+It does \emph{not} withstand an attacker who desynchronizes time or frequency.

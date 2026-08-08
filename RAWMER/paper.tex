@@ -1,0 +1,58 @@
+\documentclass{article}
+\usepackage{spconf,amsmath,graphicx,hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{makecell}
+\usepackage{amsmath,amssymb}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{stfloats}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+% Tighten float separation to fit the 4-page technical limit.
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{8pt plus 2pt minus 2pt}
+
+% Example definitions.
+% --------------------
+\def\x{{\mathbf x}}
+\def\L{{\cal L}}
+
+% Title.
+% ------
+\title{RAWMER: Reference-Assisted Speech Watermarking via Relative Mel-Energy Relations}
+%
+% Single address.
+% ---------------
+\name{Chengxun Hong\thanks{TODO before camera-ready: replace with the real
+affiliation and, if applicable, the funding acknowledgment. Remove this
+footnote for an anonymized submission.}}
+\address{Author Affiliation(s)}
+%
+% For example:
+% ------------
+%\address{School\\
+%	Department\\
+%	Address}
+%
+% Two addresses (uncomment and modify for two-address case).
+% ----------------------------------------------------------
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{figures/fig_method}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEbib}
+\bibliography{refs}
+
+\end{document}

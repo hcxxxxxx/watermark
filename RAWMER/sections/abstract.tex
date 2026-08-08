@@ -1,0 +1,23 @@
+\begin{abstract}
+Providers of neural text-to-speech need to substantiate provenance claims about
+audio they generated, which motivates watermarking the intermediate mel spectrogram.
+Existing mel-domain schemes encode each bit as an absolute perturbation pattern and
+degrade sharply under strong additive noise. We propose \texttt{RAWMER}, which
+instead encodes each bit as the sign of an energy difference between two keyed groups
+of mel bins, repeated across time blocks. Because both groups lie in the same local
+time--frequency region, distortions affecting them equally---gain changes, mild
+filtering, vocoder bias---cancel in the difference; a selection step uses the stored
+clean reference to choose bin groups that avoid the dynamic-range boundary, carry
+stable energy and are balanced in reliability. Against our re-implementation of
+MelShield at matched clean quality (PESQ\,$\approx$\,3.51) on HiFi-GAN,
+\texttt{RAWMER} raises bit accuracy under additive noise at 10 and 5\,dB SNR from
+71.3\% and 63.3\% to 94.1\% and 85.9\%, with consistent gains on DiffWave. Further
+experiments show chance-level false positives, $\approx$\,22\,KB references and
+verification from unaligned 25\% clips. Time--frequency desynchronization remains the
+main limitation and the most likely adaptive attack.
+\end{abstract}
+%
+\begin{keywords}
+Speech watermarking, provenance verification, mel spectrogram, neural
+text-to-speech, additive-noise robustness
+\end{keywords}

@@ -1,0 +1,58 @@
+\begin{table*}[t]
+\centering
+\footnotesize
+\caption{\texttt{RAWMER} on HiFi-GAN~\cite{kong2020}; \emph{nX} = additive Gaussian
+noise at $X$\,dB SNR. \textbf{(a)} Reference compression, ACC\,/\,VR at
+$\tau\!=\!0.75$ (random 2000; uint4 band is random 500); ``band'' stores the 40-bin
+watermark band, ``full'' all 80 bins, and a float32 band-only reference would occupy
+87.5\,KB. \textbf{(b)} Candidate count $C$, ACC (random 500); $C\!=\!1$ is
+differential encoding with a random bin-group pair, i.e.\ no selection.
+\textbf{(c)} Desynchronization, ACC\,/\,VR (random 500).}
+\label{tab:compress}
+\vspace{2pt}
+\renewcommand{\arraystretch}{1.0}
+\begin{minipage}[t]{0.45\linewidth}
+\centering
+{\footnotesize (a) reference compression\par}\vspace{2pt}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}l r c c c@{}}
+\toprule
+Variant & KB & n20 & n10 & n5 \\
+\midrule
+float32 (full) & 175.0 & 0.994\,/\,1.000 & 0.941\,/\,0.994 & 0.859\,/\,0.931 \\
+uint8 (band) & 21.9  & 0.994\,/\,1.000 & 0.939\,/\,0.993 & 0.858\,/\,0.925 \\
+uint4 (full) & 21.9  & 0.982\,/\,1.000 & 0.905\,/\,0.975 & 0.818\,/\,0.842 \\
+uint4 (band) & 11.0  & 0.983\,/\,1.000 & 0.913\,/\,0.984 & 0.825\,/\,0.856 \\
+\bottomrule
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.155\linewidth}
+\centering
+{\footnotesize (b) candidates\par}\vspace{2pt}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}c c c c@{}}
+\toprule
+$C$ & PESQ & n10 & n5 \\
+\midrule
+1  & 3.55 & 0.767 & 0.668 \\
+4  & 3.53 & 0.889 & 0.785 \\
+8  & 3.52 & 0.923 & 0.832 \\
+16 & 3.51 & \textbf{0.944} & \textbf{0.861} \\
+\bottomrule
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.35\linewidth}
+\centering
+{\footnotesize (c) desynchronization\par}\vspace{2pt}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}l c c@{}}
+\toprule
+Magnitude & pitch shift & speed \\
+\midrule
+small  & $\pm25$\,c: 1.000\,/\,1.000  & $3\%$: 0.959\,/\,0.997 \\
+medium & $\pm50$\,c: 0.995\,/\,1.000  & $5\%$: 0.843\,/\,0.878 \\
+large  & $\pm100$\,c: 0.784\,/\,0.728 & $10\%$: 0.675\,/\,0.290 \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\end{table*}

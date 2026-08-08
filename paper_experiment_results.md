@@ -7,6 +7,7 @@
 - HiFi-GAN 条件下，RAWMER 可靠候选对版本在 random2000、干净 PESQ 约 3.51 时，显著优于质量匹配的本地复现 MelShield。RAWMER 在 `noise20/noise10/noise5` 上分别达到 0.9942、0.9408、0.8587，MelShield 为 0.9028、0.7129、0.6328。
 - DiffWave 条件下，RAWMER 当前主配置在 random2000、干净 PESQ 约 3.514 时，明显优于质量匹配的本地复现 MelShield。二者干净 PESQ 分别为 3.5140 和 3.5149，RAWMER 在 `noise20/noise10/noise5` 上分别达到 0.9904、0.9218、0.8353，MelShield 为 0.9685、0.8225、0.7219。
 - DiffWave 质量边缘复核显示，RAWMER `alpha=0.355` 是目前更合适的质量合格主配置；`alpha=0.358` 的鲁棒性略强，但 clean PESQ 为 3.4971，低于 3.5，因此只作为质量边界参考，不替换主配置。
+- EnCodec neural codec 攻击 random500 已完成。RAWMER 在 6/12/24 kbps 下仍保持较高鲁棒性：HiFi-GAN 为 `0.9761/0.9901/0.9951`，DiffWave 为 `0.9768/0.9889/0.9920`，验证率最低为 0.998；同配置 MelShield 分别为 HiFi-GAN `0.8876/0.9417/0.9541`、DiffWave `0.9431/0.9689/0.9761`。
 - 波形后处理 baseline 已完成 AudioSeal 和 WavMark 的 random500 全攻击评测。二者在非噪声攻击下表现很强，但在 `noise10/noise5` 下验证率明显失效；AudioSeal 的噪声条件下 `BitAcc` 和 detector-based verification 存在明显差异，论文中应同时报告。
 - reference-based verification 负控实验显示，正确 reference 在 `none/noise20` 下验证率均为 1.000；未加水印、错误密钥、错误 payload、错误 reference 等条件的 bit accuracy 基本回到随机水平。random2000 单攻击扩展实验中，错误密钥、错误 payload、错误 reference 的验证率分别为 0.15%、0.40%、0.35%。
 - reference 压缩实验显示，仅保存水印频带的 8-bit clean mel 平均约 21.87KB/reference，仍能保持 `noise20=0.9939`、`noise10=0.9394`、`noise5=0.8584`，接近 float32 reference 的 `0.9943/0.9407/0.8595`。
@@ -348,6 +349,28 @@ MelShield：
 
 结论：RAWMER 对低码率压缩、滤波、幅度裁剪、8-bit 量化和较强混响在两种声码器下都保持较高鲁棒性，其中多数攻击下验证率为 1.000。DiffWave 下 `rs8` 有一定下降，但仍保持 0.9483 ACC 和 0.994 VR。主要薄弱点在两个声码器上保持一致：时间尺度改变和 pitch shift 会破坏当前以 reference frame alignment 为基础的小范围平移对齐假设。0 dB 噪声下仍有约 0.73 到 0.75 bit accuracy，但验证率下降到 0.486 到 0.598，说明极强噪声是另一个边界条件。轻微同步扰动的退化边界见下一节。
 
+## Neural Codec 攻击：EnCodec
+
+本实验用于补充现代 neural audio codec（神经音频编解码器）压缩攻击。协议：random500，攻击为 `none mp3 aac encodec6 encodec12 encodec24 noise20 noise10 noise5`。`encodec6/12/24` 分别表示 EnCodec 约 6/12/24 kbps 重编码。表中为 `ACC / VR / PESQ`。
+
+| 声码器 | 方法 | none | encodec6 | encodec12 | encodec24 |
+|---|---|---:|---:|---:|---:|
+| HiFi-GAN | MelShield | 0.9993 / 1.000 / 3.5151 | 0.8876 / 0.996 / 2.4323 | 0.9417 / 1.000 / 2.8068 | 0.9541 / 1.000 / 3.0213 |
+| HiFi-GAN | RAWMER | 0.9999 / 1.000 / 3.5101 | 0.9761 / 1.000 / 2.3735 | 0.9901 / 1.000 / 2.7523 | 0.9951 / 1.000 / 2.9684 |
+| DiffWave | MelShield | 0.9998 / 1.000 / 3.5165 | 0.9431 / 1.000 / 2.3907 | 0.9689 / 1.000 / 2.7563 | 0.9761 / 1.000 / 2.9728 |
+| DiffWave | RAWMER | 0.9998 / 1.000 / 3.5181 | 0.9768 / 0.998 / 2.3251 | 0.9889 / 1.000 / 2.6821 | 0.9920 / 1.000 / 2.8990 |
+
+同一组实验中的传统 codec 和噪声参考如下：
+
+| 声码器 | 方法 | mp3 | aac | noise20 | noise10 | noise5 |
+|---|---|---:|---:|---:|---:|---:|
+| HiFi-GAN | MelShield | 0.9993 / 1.000 | 0.9990 / 1.000 | 0.9001 / 1.000 | 0.7113 / 0.860 | 0.6302 / 0.584 |
+| HiFi-GAN | RAWMER | 0.9999 / 1.000 | 0.9999 / 1.000 | 0.9946 / 1.000 | 0.9436 / 0.992 | 0.8629 / 0.930 |
+| DiffWave | MelShield | 0.9998 / 1.000 | 0.9998 / 1.000 | 0.9686 / 1.000 | 0.8264 / 0.978 | 0.7230 / 0.872 |
+| DiffWave | RAWMER | 0.9999 / 1.000 | 0.9998 / 1.000 | 0.9915 / 1.000 | 0.9239 / 0.982 | 0.8344 / 0.880 |
+
+结论：EnCodec 对音质的破坏明显强于 MP3/AAC，尤其 6 kbps 下 PESQ 降到约 2.33 到 2.43；但 RAWMER 的 relative mel-energy relation 仍能稳定恢复 payload。相比质量匹配 MelShield，RAWMER 在 EnCodec 下的 ACC 全部更高：HiFi-GAN 上提升约 8.9/4.8/4.1 个百分点，DiffWave 上提升约 3.4/2.0/1.6 个百分点。该结果可以作为“现代 neural codec 攻击”补充表，证明 RAWMER 的优势不只局限于 additive noise。
+
 ## 同步扰动强度曲线
 
 本实验细化 `speed` 和 `pitch shift` 的强度边界。协议：RAWMER + HiFi-GAN，random500，`band=20:60`，主配置不变。当前记录来自 `runs/relmel_hifigan_speed_pitch_curve_random500`。`pitch_up25/down25` 表示约 ±25 cents，`pitch_up50/down50` 表示约 ±50 cents，`pitch_up/down` 表示约 ±100 cents，也就是 1 个半音。
@@ -414,5 +437,6 @@ RAWMER + DiffWave 的有用强度区间集中在 `alpha=0.30` 到 `0.358`。当�
 - reported 数据和本地复现数据要分开表述，不能混成同一个公平协议。
 - HiFi-GAN 的主对比已经扩展到 random2000：RAWMER 在相近干净 PESQ 下明显强于本地复现 MelShield，对 `noise20/noise10/noise5` 的提升分别约为 9.1、22.8、22.6 个百分点。
 - DiffWave 的质量匹配主对照已经扩展到 random2000：在干净 PESQ 基本一致的条件下，RAWMER 对 `noise20/noise10/noise5` 的提升分别约为 2.2、9.9、11.3 个百分点。
+- EnCodec neural codec 攻击可以作为现代压缩攻击补充证据：random500 下 RAWMER 在 6/12/24 kbps 上保持约 0.976 到 0.995 ACC，优于质量匹配 MelShield；但由于这是 random500 补充实验，建议放在扩展攻击或补充表中，不要和 random2000 主表混成同一规模。
 - AudioSeal/WavMark 是波形后处理 baseline，payload 为 16 bit；应作为跨范式公开强 baseline 单独成组，而不是与 32 bit 梅尔域方法直接混成同一公平协议。
 - 方法贡献建议表述为：基于块级相对 Mel 关系的可靠候选对选择机制，提高了水印在加性噪声下的稳定性。

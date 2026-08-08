@@ -1,0 +1,55 @@
+\section{Method}
+\label{sec:method}
+
+\texttt{RAWMER} embeds an $N$-bit payload into the intermediate mel spectrogram before vocoding and recovers it from a suspect waveform using a stored clean mel reference (Fig.~\ref{fig:method}).
+
+\subsection{Setup}
+\label{sec:method:setup}
+Let $X\!\in\![0,1]^{F\times T}$ be the per-utterance min--max normalized log-mel and $X_B$ its watermark band of $B$ bins. We partition time into blocks of length $L$, stride $S$; each block $k$ writes a keyed subset $\mathcal{A}_k$ of $N_b$ payload bits, from a permutation seeded by $(\kappa,k)$, so every bit recurs across blocks.
+
+\subsection{Block-wise Relative Mel-Energy Encoding}
+\label{sec:method:enc}
+For each bit $i\!\in\!\mathcal{A}_k$, a keyed SHA-256 draw on $(\kappa,\mathrm{uid},i,k)$ selects $2P$ band bins forming a \emph{bin-group pair}: disjoint positive and negative groups $\mathcal{P}^{\pm}_{i,k}$ of $P$ bins each (Fig.~\ref{fig:method}). The pair vector $p_{i,k}\!\in\!\mathbb{R}^B$ is $\pm 1/\sqrt{2P}$ on those groups and zero elsewhere. With bit polarity $s_i\!=\!2m_i\!-\!1$, a block-energy weight $w_k\!=\!\mu\!+\!(1\!-\!\mu)\bar X_{B,k}^{\gamma}$ that emphasizes voiced frames, and an active-bit scale $\eta\!=\!1/\sqrt{N_b}$, we accumulate per-block updates into a layer $\ell\!\in\!\mathbb{R}^{B\times T}$ with $\ell[\,\cdot\,,t]\!=\!\sum_{k:\,t\in[t_k,t_k+L)}\sum_{i\in\mathcal{A}_k} s_i w_k \eta\, p_{i,k}$. A headroom mask $M\!=\!\mathrm{clip}\!\bigl(\min(X_B,1\!-\!X_B)/\beta,\,0,\,1\bigr)$ suppresses updates near the dynamic-range boundary, and a reuse count $R[b,t]\!=\!\sum_{i,k}|p_{i,k}[b]|\mathbb{1}_{[t_k,t_k+L)}(t)$ spreads energy on revisited bins. The watermarked mel is
+\begin{equation}
+\tilde X_B = \mathrm{clip}\!\Bigl(X_B + \alpha\,M \odot \ell\,/\sqrt{\max(R,1)},\,0,\,1\Bigr),
+\label{eq:embed}
+\end{equation}
+where $\alpha$ controls embedding strength. The provider stores $X_B$ (or a quantized subset, \S\ref{sec:experiments}) as the reference, then vocodes $\tilde X$.
+
+\subsection{Reliability-Aware Pair Selection}
+\label{sec:method:sel}
+A purely random $p_{i,k}$ may place either group on low-energy or near-boundary bins, where the perturbation is absorbed by $M$ or by vocoder reconstruction. For each $(i,k)$ we instead draw $C$ candidate pairs from independent keyed seeds and keep the one whose groups are both reliable. Let $r[b]\!=\!\mathrm{mean}_t\bigl[M[b,t](\mu\!+\!(1\!-\!\mu)X_B[b,t]^{\gamma})\bigr]$ over frames in the block, and let $\rho^{\pm}_j$ denote the mean of $r$ over the positive/negative group of the $j$-th candidate. We select
+\begin{equation}
+j^\star=\arg\max_j\;\min(\rho^+_j,\rho^-_j)-\lambda\,|\rho^+_j-\rho^-_j|,
+\label{eq:select}
+\end{equation}
+with $\lambda\!=\!0.25$: both groups must be reliable \emph{and} balanced in reliability, avoiding pairs whose differential score would be dominated by one side. Selection costs no side information: the candidates are keyed, so the verifier re-derives $j^\star$ from the same reference. \S\ref{sec:experiments} isolates its contribution, which exceeds that of differential encoding alone.
+
+\subsection{Reference-Assisted Detection}
+\label{sec:method:det}
+Given a suspect waveform, we recompute the normalized log-mel from the reference statistics and align it by a bounded-shift search ($\pm\Delta_{\max}$ frames) maximizing Pearson correlation of frame-mean energy curves, compensating resampling or compression drift. After DC-removing $E\!=\!\tilde X'_B\!-\!X_B$ we re-derive the keyed pairs and accumulate, for each bit $i$ voted on by $V_i$ blocks,
+\begin{equation}
+z_i=\frac{1}{\sqrt{V_i}}\sum_{k:\,i\in\mathcal{A}_k} w_k\,\eta\,\bigl\langle E_k,\,p_{i,k}\bigr\rangle,
+\label{eq:score}
+\end{equation}
+where $\langle E_k,p_{i,k}\rangle$ is the joint band--time mean of $E[:,t_k\!:\!t_k\!+\!L]\odot p_{i,k}$. We decode $\hat m_i\!=\!\mathbb{1}[z_i\!\ge\!0]$ and verify when $\mathrm{ACC}(\hat m,m)\!\ge\!\tau$ ($\tau\!=\!0.75$). Since $z_i$ is differential over two groups of the \emph{same} local block, common-mode distortion---gain shifts, mild filtering, shared reconstruction bias---largely cancels, and balanced pairs keep zero-mean noise mean-zero in $\langle E_k,p_{i,k}\rangle$.
+
+\subsection{Threat Model}
+\label{sec:method:threat}
+Following Kerckhoffs' principle we treat the algorithm as public; secrecy rests on the
+key $\kappa$ and the stored reference. Verification is \emph{claim-checking}: the
+provider nominates a candidate record and we test it. Locating that record among many is
+a separate retrieval problem we do not solve---a miss is indistinguishable from our
+wrong-reference control---so claims are scoped to dispute resolution over a known
+candidate, and the reference database is secret material to protect at
+$\approx$\,22~KB per utterance.
+
+Every attack we evaluate is \emph{non-adaptive}: signal processing by an attacker
+ignorant of $\kappa$. Two stronger adversaries bound the claims. If $\kappa$ leaks, the
+attacker recomputes every $(\mathcal{P}^{\pm}_{i,k})$, Eq.~\eqref{eq:select} included,
+and flips any bit by transferring energy between the groups---far weaker than the noise
+we test---so removal cost is set by key confidentiality, not embedding strength. If
+$\kappa$ \emph{and} a reference leak, the attacker can forge a valid mark onto
+arbitrary audio and frame the provider. Lacking $\kappa$, an attacker can still
+desynchronize the signal, the effective attack per \S\ref{sec:experiments}. Our claims
+are limited to non-adaptive distortion plus desynchronization.

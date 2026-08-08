@@ -1,0 +1,65 @@
+\begin{table*}[t]
+\setlength{\belowcaptionskip}{4pt}
+\centering
+\footnotesize
+\caption{LJSpeech~\cite{ljspeech2017}, random 2000 (seed 2026); \emph{nX} = additive
+Gaussian noise at $X$\,dB SNR; ``Ref.'' marks \emph{informed} detectors, which read
+the clean reference. \textbf{(a)} Bit accuracy: mel-domain methods
+(\texttt{RAWMER}, MelShield~\cite{jin2026}) carry 32 bits at matched clean
+PESQ\,$\approx$\,3.51, while AudioSeal~\cite{san2024} and WavMark~\cite{chen2023}
+(blind, forced-decoded) carry 16 bits on random 500---context, not matched
+competitors. \textbf{(b)} Verification rate at two thresholds (a clip verifies when
+$\text{ACC}\!\geq\!\tau$), with FPR the chance-level rate
+$\Pr[\text{Bin}(32,\tfrac12)\!\geq\!\lceil 32\tau\rceil]$: $\tau\!=\!0.61$ buys VR at
+$31\times$ the FPR, so it is a bit-margin diagnostic only. Bold: best per column,
+ties included.}
+\label{tab:main}
+\vspace{2pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{minipage}[t]{0.465\linewidth}
+\centering
+{\footnotesize (a) bit accuracy\par}\vspace{2pt}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l l c c c c c@{}}
+\toprule
+Vocoder & Method & Ref. & none & n20 & n10 & n5 \\
+\midrule
+\multirow{4}{*}{HiFi-GAN}
+ & MelShield  & \checkmark & 0.999 & 0.903 & 0.713 & 0.633 \\
+ & \texttt{RAWMER} & \checkmark & \textbf{1.000} & \textbf{0.994} & \textbf{0.941} & \textbf{0.859} \\
+ & AudioSeal & --- & \textbf{1.000} & 0.974 & 0.790 & 0.647 \\
+ & WavMark   & --- & \textbf{1.000} & 0.752 & 0.511 & 0.493 \\
+\midrule
+\multirow{4}{*}{DiffWave}
+ & MelShield  & \checkmark & \textbf{1.000} & 0.969 & 0.823 & 0.722 \\
+ & \texttt{RAWMER} & \checkmark & \textbf{1.000} & \textbf{0.990} & \textbf{0.922} & \textbf{0.835} \\
+ & AudioSeal & --- & \textbf{1.000} & 0.966 & 0.754 & 0.618 \\
+ & WavMark   & --- & \textbf{1.000} & 0.670 & 0.512 & 0.498 \\
+\bottomrule
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.495\linewidth}
+\centering
+{\footnotesize (b) verification rate\par}\vspace{2pt}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l c c l c c c@{}}
+\toprule
+Vocoder & $\tau$ & FPR & Method & n20 & n10 & n5 \\
+\midrule
+\multirow{4}{*}{HiFi-GAN}
+ & \multirow{2}{*}{0.75} & \multirow{2}{*}{0.35\%} & MelShield & 0.969 & 0.434 & 0.127 \\
+ & & & \texttt{RAWMER} & \textbf{1.000} & \textbf{0.991} & \textbf{0.918} \\
+\cmidrule(lr){2-7}
+ & \multirow{2}{*}{0.61} & \multirow{2}{*}{10.8\%} & MelShield & 0.999 & 0.874 & 0.612 \\
+ & & & \texttt{RAWMER} & \textbf{1.000} & \textbf{1.000} & \textbf{0.995} \\
+\midrule
+\multirow{4}{*}{DiffWave}
+ & \multirow{2}{*}{0.75} & \multirow{2}{*}{0.35\%} & MelShield & 0.997 & 0.841 & 0.485 \\
+ & & & \texttt{RAWMER} & \textbf{1.000} & \textbf{0.983} & \textbf{0.871} \\
+\cmidrule(lr){2-7}
+ & \multirow{2}{*}{0.61} & \multirow{2}{*}{10.8\%} & MelShield & \textbf{1.000} & 0.973 & 0.872 \\
+ & & & \texttt{RAWMER} & \textbf{1.000} & \textbf{1.000} & \textbf{0.985} \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\end{table*}

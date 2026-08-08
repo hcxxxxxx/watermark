@@ -101,119 +101,115 @@ II. PROPOSED METHOD
 
 A. Problem Setting: Reference-Assisted Verification
 ----------------------------------------------------
-At generation time, the provider holds a clean mel spectrogram
-M in R^{F x T}, min-max normalized to [0,1], where F is the number of mel bins
-and T the number of frames.
-For each utterance it draws a payload b in {0,1}^L of L bits, derived
-deterministically from an utterance identifier and a secret key. The secret key
-is kept in protected verifier state, while the retained reference record stores
-the utterance identifier, a payload commitment or recomputable payload metadata,
-and a (possibly compressed) copy of the clean mel M. RAWMER embeds b into M to
-produce a watermarked mel M_hat, which a vocoder G renders to the released
-waveform x_hat = G(M_hat).
+At generation time, the provider has access to a clean mel spectrogram
+M in [0,1]^{F x T}, obtained by min-max normalizing the log-mel representation
+of an utterance. For each utterance, a payload b in {0,1}^L is derived from the
+utterance identifier and a secret key. The key remains in protected verifier
+state; the retained record contains the utterance identifier, the payload or
+metadata needed to recompute it, and a possibly compressed copy of M. RAWMER
+embeds b into M to obtain a watermarked mel M_hat, which a vocoder G renders as
+the released waveform x_hat = G(M_hat).
 
-Verification is payload-specific rather than mere presence detection. Given a
-suspect clip y, the verifier recovers the expected payload b from the
-identifier and key, re-analyzes y to a mel M_y, and forms the residual against
-the retained reference,
+Verification is payload-specific rather than a binary presence test. Given a
+suspect clip y, the verifier re-analyzes it into a mel spectrogram, normalizes it
+with the stored reference statistics, aligns it to the reference within a small
+frame shift, and forms
 
         R = M_y - M,                                                   (1)
 
-from which it decodes b_hat. Writing the bit accuracy as
-acc = (1/L) sum_i 1[b_hat_i = b_i], the clip is verified if acc >= tau for a
-threshold tau. Attribution is decided by this payload match, not by signal
-strength alone, so a correct decision requires the correct combination of key,
-payload, and reference. The threshold is set below 1 (we use tau = 0.75) to
-tolerate the few bit errors expected under strong distortion, while the negative
-controls of Section III show that wrong key/payload/reference still fail.
+where M_y is the aligned suspect mel. The detector decodes b_hat from R and
+computes
+
+        ACC = (1/L) sum_i 1[b_hat_i = b_i].                             (2)
+
+The clip is verified if ACC >= tau. In all main experiments tau = 0.75. Thus
+attribution depends on matching the claimed payload under the correct key and
+reference, not on a confidence score alone. The negative controls in Section III
+show that wrong keys, wrong payloads, and wrong references remain near chance.
 
 B. Relative Mel-Energy Encoding
 -------------------------------
-Rather than writing a bit as the presence of an expected absolute perturbation,
-RAWMER writes it as the sign of an energy difference between two groups of mel
-bins. The time axis is partitioned into blocks of W frames with stride W
-(non-overlapping; W = 8 frames in our configuration), and embedding is confined
-to a watermark band of mel bins [f_lo, f_hi) (we use bins 20-60 of 80). Each
-block carries K payload bits (K = 6), so a single block contributes a small,
-redundant slice of the full payload.
+RAWMER represents each bit by a relative energy relation rather than by an
+absolute residual pattern. Embedding is restricted to a mel band
+[f_lo, f_hi); in the main configuration this is bins 20-60 out of F = 80. The
+time axis is divided into blocks of W frames with stride W, and each block
+encodes a keyed subset of K payload bits. In our experiments W = 8 and K = 6.
+The keyed subset rotates across blocks so that each payload bit is observed in
+multiple blocks.
 
-For a given bit assigned to a block, RAWMER selects two disjoint sets of mel
-bins within the band, a positive group P and a negative group N, each of size p
-(p = 6). The bit is embedded by pushing the two groups in opposite directions
-inside the block region B (the W frames by the bins of P and N):
+For bit i in block q, a keyed pseudo-random procedure selects two disjoint
+groups of mel bins, P_{i,q} and N_{i,q}, each of size p. These groups define a
+zero-sum pair vector v_{i,q} over the watermark band, with positive entries on
+P_{i,q}, negative entries on N_{i,q}, and ||v_{i,q}||_2 = 1. A bit value is
+encoded by the sign of the update: bit 1 increases P_{i,q} and decreases
+N_{i,q}; bit 0 applies the opposite polarity. Updates are scaled by the
+embedding strength alpha, an energy-dependent block weight, and 1/sqrt(K) so
+that blocks carrying more active bits do not receive proportionally larger
+energy. When several updates hit the same bin-frame location, the accumulated
+perturbation is divided by a reuse factor. A boundary mask
+clip(min(M,1-M)/delta,0,1), with margin delta, further prevents updates near the
+normalization limits; the final watermarked mel is clipped to [0,1].
 
-  - to embed 1: raise the energy of P and lower the energy of N;
-  - to embed 0: lower the energy of P and raise the energy of N.
+At detection, RAWMER subtracts the reference, removes the mean residual within
+the watermark band, and computes a signed block score
 
-Perturbations are scaled by a strength alpha and constrained by a spectral mask
-(floor mask_floor) and a boundary margin so that the modified mel stays within
-its admissible range and audible damage is limited.
+        s_{i,q} = mean_t < R_q(:,t), v_{i,q} > .                         (3)
 
-At detection, RAWMER does not inspect any single bin in M_y; it reads the
-residual R of (1), removes its global mean (R <- R - mean(R)) to discard any
-uniform offset between the suspect and the reference, and compares the two
-groups,
-
-        s \propto mean_{(f,t) in P x B} R(f,t)
-              - mean_{(f,t) in N x B} R(f,t).                          (2)
-
-In the implementation, this comparison is computed as the mean inner product
-between the block residual and a signed, unit-normalized pair vector, whose
-positive entries correspond to P and negative entries correspond to N.
-
-A positive score s favors bit 1, a negative score favors bit 0. Because s is a
-difference of two co-located group means computed on a DC-removed residual, any
-distortion that acts in common on the local block region -- a gain change, mild
-filtering, or a slowly varying vocoder reconstruction bias -- shifts both terms
-together and largely cancels, leaving the embedded directional offset. This
-differential measurement is the source of RAWMER's robustness relative to
-absolute-pattern detection.
+A positive score supports bit 1 and a negative score supports bit 0. Since
+v_{i,q} is zero-sum, common-mode changes in the selected local band, such as
+small gain shifts, mild spectral shaping, or smooth vocoder bias, are suppressed
+by the differential measurement. This is the main contrast with absolute-pattern
+watermarking, where detection relies on recovering a fixed residual pattern.
 
 C. Reliability-Aware Pair Selection
 -----------------------------------
-Not every pair of bin groups is equally trustworthy. Bins with very low energy
-are easily ignored by the vocoder or buried by noise; bins already close to the
-admissible boundary cannot be pushed further without clipping or mask
-truncation; and if P and N differ greatly in reliability, the score s becomes
-biased. RAWMER therefore does not commit to a single random pair. For each
-bit/block it generates C candidate pairs (C = 16) and scores them against the
-clean reference using two notions of reliability:
+Random bin pairs are not equally stable after vocoding. Near-silent bins may not
+survive the waveform reconstruction, bins close to 0 or 1 have little headroom
+for further perturbation, and an unbalanced positive/negative pair introduces a
+biased differential score. RAWMER therefore ranks multiple candidate pairs using
+the clean reference. For each bit/block, it samples C keyed candidate pairs
+(C = 16 in the main configuration). For a bin f in the local clean block, we use
+a reliability value
 
-  - Boundary reliability: bins farther from the admissible upper/lower bound can
-    absorb the intended perturbation with less clipping and less audible damage.
-  - Energy reliability: bins carrying nontrivial speech energy propagate the
-    perturbation through the vocoder more stably than near-silent bins.
+        rho(f) = mean_t m(f,t) [mu + (1-mu) M(f,t)^gamma],              (4)
 
-The goal is not to pick the loudest bins but to pick a pair in which both groups
-are reliable and the two are balanced against each other. With rel(P) and rel(N)
-the mean reliabilities of the two groups, a candidate is scored as
+where m(f,t) is the boundary mask, mu is the mask floor, and gamma controls the
+energy emphasis. This couples boundary headroom and local speech energy: a bin
+is reliable only if it can be perturbed and has enough energy to propagate
+through the vocoder.
 
-  score = min(rel(P), rel(N)) - 0.25 * | rel(P) - rel(N) |,           (3)
+Let rho(P) and rho(N) be the average reliability of the positive and negative
+groups. Candidate c is scored by
 
-so that a pair reliable on both sides is preferred over one that is strong on
-one side and weak on the other, and the most reliable candidate is selected for
-embedding. Here reliability combines a boundary term, proportional to the
-headroom min(M, 1-M) of a bin toward its admissible bounds, and an energy term
-that grows with the bin's speech energy. As shown in Section III, increasing C
-from 1 to 16 is the single largest contributor to additive-noise robustness, at
-negligible cost in clean speech quality.
+        S_c = min(rho(P), rho(N)) - 0.25 |rho(P) - rho(N)|.             (5)
+
+The first term requires both sides to be reliable; the second penalizes
+imbalanced pairs. The highest-scoring candidate is used for both embedding and
+detection. Section III shows that increasing C from 1 to 16 substantially
+improves robustness to additive noise with only a small clean-quality cost.
 
 D. Block-Wise Embedding and Voting
 ----------------------------------
-The payload is not written once but distributed redundantly across many time
-blocks, and the per-block evidence is aggregated at detection. This block-wise
-design has several consequences that matter for forensic use. It resists local
-corruption, since blocks spared by noise, echo, or cropping still carry the
-payload; it supports partial-clip verification, since any fragment retaining
-enough blocks can be decoded; and it stabilizes the decision through voting,
-since averaging many noisy per-block scores yields a more reliable bit estimate
-than any single block. For each payload bit, the signed scores of (2) from all
-blocks that encode it are accumulated into a vote, and the sign of the
-accumulated vote gives the decoded bit b_hat_i. When only a fragment is
-available and its offset in the reference is unknown, the verifier slides the
-fragment over the reference (search step of 4 frames) and keeps the alignment
-that maximizes agreement, which Section III shows localizes the crop to within
-about one mel frame.
+Each payload bit is repeated across the blocks selected for it, and detection
+aggregates the corresponding signed scores. Specifically, each raw score
+s_{i,q} is multiplied by the same clean-block energy factor and active-bit
+normalization used at embedding. The bit-level score is then normalized by the
+square root of the number of votes:
+
+        S_i = (sum_q w_q a_q s_{i,q}) / sqrt(max(n_i,1)),
+        b_hat_i = 1[S_i >= 0],                                          (6)
+
+where n_i is the number of blocks that carry bit i, w_q is the clean-block
+energy factor, and a_q = 1/sqrt(K_q) accounts for the number of active bits in
+block q.
+
+This redundancy turns local evidence into an utterance-level payload decision:
+noise or cropping may corrupt some blocks, but remaining blocks still vote for
+the correct bit. The design also supports partial-clip verification. If the
+fragment offset is known, the verifier compares the fragment to the
+corresponding reference span. If the offset is unknown, it performs a sliding
+reference search and chooses the span with the strongest signed payload score;
+the blind-fragment experiment in Section III uses a 4-frame search step.
 
 
 ------------------------------------------------------------------
@@ -322,7 +318,7 @@ remain strong.
 D. Validating the Reference-Assisted Setting
 --------------------------------------------
 A reference-assisted method must show that it does not pass for an arbitrary
-reference, and that retaining references is practical. Table 3 summarizes three
+reference, and that retaining references is practical. Table 3 summarizes four
 studies on HiFi-GAN.
 
 False positives. We run negative controls on 2000 utterances with no attack.
@@ -401,37 +397,42 @@ configuration is stable (noise5 ACC 0.8607/0.8588/0.8574).
 Robustness scope and limitations. Beyond the common attacks of Table 1, RAWMER
 stays robust under modern operations: low-bitrate MP3/AAC, 2 kHz low-pass, wide
 band-pass, amplitude clipping, 8-bit quantization, and strong reverberation all
-keep VR at 1.000 on both vocoders. Two boundaries remain. Extreme 0 dB additive
+keep VR at 1.000 on both vocoders. Neural codec compression shows the same
+trend: under EnCodec at 6/12/24 kbps, RAWMER keeps ACC in the range 0.976-0.995
+with VR >= 0.998 across the two vocoders, above MelShield's 0.888-0.976 in the
+same random500 protocol. Two boundaries remain. Extreme 0 dB additive
 noise lowers VR to 0.486-0.598. More importantly, RAWMER is sensitive to
 time/frequency desynchronization: detection relies on frame-level alignment
 between the suspect and reference mels, so large speed changes and pitch shifts
-misalign the blocks and shift the chosen bin relations. Mild distortions are
-tolerated -- pitch shifts within +/-50 cents keep ACC above 0.995 and VR 1.000,
-and +/-3% speed keeps VR above 0.99 -- but a one-semitone (+/-100 cents) shift
-drops ACC to about 0.78, and +/-10% speed drops VR below 0.33. The dominant
-failure mode is not loss of watermark energy but broken synchronization, which
-points to multi-scale alignment, dynamic time warping, or pitch-aware matching
-as future work.
+misalign the blocks and shift the chosen bin relations. In a HiFi-GAN sweep,
+mild distortions are tolerated: pitch shifts within +/-50 cents keep ACC above
+0.995 and VR 1.000, and +/-3% speed keeps VR above 0.99. Across the two vocoders,
+however, a one-semitone (+/-100 cents) pitch shift reduces ACC to 0.65-0.79, and
++/-10% speed drops VR below 0.33. The dominant failure mode is not loss of
+watermark energy but broken synchronization, which points to multi-scale
+alignment, dynamic time warping, or pitch-aware matching as future work.
 
 
 ------------------------------------------------------------------
 IV. CONCLUSION
 ------------------------------------------------------------------
-We presented RAWMER, a reference-assisted mel-domain watermarking method for
-provenance verification of neural speech. Rather than encoding payload bits as
-absolute perturbation patterns, RAWMER writes them as relative energy relations
-between reliability-selected groups of mel bins across repeated time blocks, and
-detects them with a differential, DC-removed score that cancels common-mode
-distortion. On LJSpeech with HiFi-GAN and DiffWave, RAWMER substantially
-improves additive-noise robustness over a quality-matched MelShield
-re-implementation while remaining strong under common signal-processing attacks.
-A systematic study of the setting -- low false verification under
-wrong-key/payload/reference controls, compact ~22 KB references, and blind
-partial-clip verification -- indicates that reference-assisted verification is
-both sound and practical for provider-side attribution. The main limitation is
-strong time/frequency desynchronization, such as large speed or pitch changes;
-addressing it through multi-scale alignment, dynamic time warping, or
-pitch-aware matching is our primary direction for future work.
+We introduced RAWMER, a reference-assisted mel-domain watermarking method for
+neural speech provenance verification. RAWMER replaces absolute residual
+patterns with relative mel-energy relations between reliability-selected bin
+groups, and decodes the payload by aggregating differential block scores against
+a retained clean-mel reference. Experiments on LJSpeech with HiFi-GAN and
+DiffWave show that this design improves robustness to strong additive noise over
+a quality-matched MelShield re-implementation, while maintaining high
+verification rates under common signal-processing and neural codec attacks.
+Negative controls with wrong
+keys, payloads, and references keep verification near chance; band-limited
+reference quantization reduces storage to about 22 KB per utterance with little
+loss; and blind fragment search verifies short, unaligned clips. These results
+support the feasibility of reference-assisted mel-domain watermarking for
+provider-side attribution. The main limitation is synchronization: large speed
+changes and pitch shifts can misalign the reference and suspect mels. Future
+work will therefore focus on multi-scale temporal alignment and pitch-aware
+matching.
 
 
 ------------------------------------------------------------------

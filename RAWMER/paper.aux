@@ -1,0 +1,100 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{yi2023}
+\citation{san2024}
+\citation{chen2023}
+\citation{san2024}
+\citation{yi2023}
+\citation{san2024}
+\citation{chen2023}
+\citation{singh2024}
+\citation{liu2024timbre}
+\citation{zhou2024}
+\citation{liu2024groot}
+\citation{kong2020}
+\citation{kong2021}
+\citation{jin2026}
+\citation{jin2026}
+\citation{bender1996}
+\citation{yeo2003}
+\citation{chen2001}
+\citation{cox2008}
+\citation{kong2020}
+\citation{kong2021}
+\citation{jin2026}
+\@writefile{toc}{\contentsline {section}{\numberline {1} Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:introduction}{{1}{1}{Introduction}{section.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces RAWMER pipeline: (a) reference-guided bin-group selection among $C$ candidates; (b) differential encoding — the bit sets the sign of the group energy difference; (c) embed and verify — distortions common to both groups cancel in $z_i$. [Replace this caption with your own.]}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:method}{{1}{2}{RAWMER pipeline: (a) reference-guided bin-group selection among $C$ candidates; (b) differential encoding — the bit sets the sign of the group energy difference; (c) embed and verify — distortions common to both groups cancel in $z_i$. [Replace this caption with your own.]}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2} Method}{2}{section.2}\protected@file@percent }
+\newlabel{sec:method}{{2}{2}{Method}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1} Setup}{2}{subsection.2.1}\protected@file@percent }
+\newlabel{sec:method:setup}{{2.1}{2}{Setup}{subsection.2.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2} Block-wise Relative Mel-Energy Encoding}{2}{subsection.2.2}\protected@file@percent }
+\newlabel{sec:method:enc}{{2.2}{2}{Block-wise Relative Mel-Energy Encoding}{subsection.2.2}{}}
+\newlabel{eq:embed}{{1}{2}{Block-wise Relative Mel-Energy Encoding}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3} Reliability-Aware Pair Selection}{2}{subsection.2.3}\protected@file@percent }
+\newlabel{sec:method:sel}{{2.3}{2}{Reliability-Aware Pair Selection}{subsection.2.3}{}}
+\newlabel{eq:select}{{2}{2}{Reliability-Aware Pair Selection}{equation.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4} Reference-Assisted Detection}{2}{subsection.2.4}\protected@file@percent }
+\newlabel{sec:method:det}{{2.4}{2}{Reference-Assisted Detection}{subsection.2.4}{}}
+\citation{ljspeech2017}
+\citation{kong2020}
+\citation{kong2021}
+\citation{ljspeech2017}
+\citation{jin2026}
+\citation{san2024}
+\citation{chen2023}
+\citation{ljspeech2017}
+\citation{jin2026}
+\citation{san2024}
+\citation{chen2023}
+\citation{kong2020}
+\citation{kong2020}
+\citation{jin2026}
+\citation{san2024}
+\citation{chen2023}
+\citation{jin2026}
+\citation{jin2026}
+\citation{cox2008}
+\citation{jin2026}
+\newlabel{eq:score}{{3}{3}{Reference-Assisted Detection}{equation.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5} Threat Model}{3}{subsection.2.5}\protected@file@percent }
+\newlabel{sec:method:threat}{{2.5}{3}{Threat Model}{subsection.2.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3} Experiments}{3}{section.3}\protected@file@percent }
+\newlabel{sec:experiments}{{3}{3}{Experiments}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1} Setup}{3}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2} Main Comparison}{3}{subsection.3.2}\protected@file@percent }
+\citation{defossez2022}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces LJSpeech~\cite  {ljspeech2017}, random 2000 (seed 2026); \emph  {nX} = additive Gaussian noise at $X$\,dB SNR; ``Ref.'' marks \emph  {informed} detectors, which read the clean reference. \textbf  {(a)} Bit accuracy: mel-domain methods (\texttt  {RAWMER}, MelShield~\cite  {jin2026}) carry 32 bits at matched clean PESQ\,$\approx $\,3.51, while AudioSeal~\cite  {san2024} and WavMark~\cite  {chen2023} (blind, forced-decoded) carry 16 bits on random 500---context, not matched competitors. \textbf  {(b)} Verification rate at two thresholds (a clip verifies when $\text  {ACC}\!\geq \!\tau $), with FPR the chance-level rate $\Pr [\text  {Bin}(32,\tfrac  12)\!\geq \!\lceil 32\tau \rceil ]$: $\tau \!=\!0.61$ buys VR at $31\times $ the FPR, so it is a bit-margin diagnostic only. Bold: best per column, ties included.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:main}{{1}{4}{LJSpeech~\cite {ljspeech2017}, random 2000 (seed 2026); \emph {nX} = additive Gaussian noise at $X$\,dB SNR; ``Ref.'' marks \emph {informed} detectors, which read the clean reference. \textbf {(a)} Bit accuracy: mel-domain methods (\texttt {RAWMER}, MelShield~\cite {jin2026}) carry 32 bits at matched clean PESQ\,$\approx $\,3.51, while AudioSeal~\cite {san2024} and WavMark~\cite {chen2023} (blind, forced-decoded) carry 16 bits on random 500---context, not matched competitors. \textbf {(b)} Verification rate at two thresholds (a clip verifies when $\text {ACC}\!\geq \!\tau $), with FPR the chance-level rate $\Pr [\text {Bin}(32,\tfrac 12)\!\geq \!\lceil 32\tau \rceil ]$: $\tau \!=\!0.61$ buys VR at $31\times $ the FPR, so it is a bit-margin diagnostic only. Bold: best per column, ties included}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \texttt  {RAWMER} on HiFi-GAN~\cite  {kong2020}; \emph  {nX} = additive Gaussian noise at $X$\,dB SNR. \textbf  {(a)} Reference compression, ACC\,/\,VR at $\tau \!=\!0.75$ (random 2000; uint4 band is random 500); ``band'' stores the 40-bin watermark band, ``full'' all 80 bins, and a float32 band-only reference would occupy 87.5\,KB. \textbf  {(b)} Candidate count $C$, ACC (random 500); $C\!=\!1$ is differential encoding with a random bin-group pair, i.e.\ no selection. \textbf  {(c)} Desynchronization, ACC\,/\,VR (random 500).}}{4}{table.2}\protected@file@percent }
+\newlabel{tab:compress}{{2}{4}{\texttt {RAWMER} on HiFi-GAN~\cite {kong2020}; \emph {nX} = additive Gaussian noise at $X$\,dB SNR. \textbf {(a)} Reference compression, ACC\,/\,VR at $\tau \!=\!0.75$ (random 2000; uint4 band is random 500); ``band'' stores the 40-bin watermark band, ``full'' all 80 bins, and a float32 band-only reference would occupy 87.5\,KB. \textbf {(b)} Candidate count $C$, ACC (random 500); $C\!=\!1$ is differential encoding with a random bin-group pair, i.e.\ no selection. \textbf {(c)} Desynchronization, ACC\,/\,VR (random 500)}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3} Reference-Assisted Verification}{4}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4} Ablation and Robustness Boundary}{4}{subsection.3.4}\protected@file@percent }
+\citation{bender1996}
+\citation{yeo2003}
+\bibstyle{IEEEbib}
+\bibdata{refs}
+\bibcite{yi2023}{1}
+\bibcite{san2024}{2}
+\bibcite{chen2023}{3}
+\bibcite{singh2024}{4}
+\bibcite{liu2024timbre}{5}
+\bibcite{zhou2024}{6}
+\bibcite{liu2024groot}{7}
+\bibcite{kong2020}{8}
+\bibcite{kong2021}{9}
+\bibcite{jin2026}{10}
+\bibcite{bender1996}{11}
+\bibcite{yeo2003}{12}
+\bibcite{chen2001}{13}
+\bibcite{cox2008}{14}
+\bibcite{ljspeech2017}{15}
+\bibcite{defossez2022}{16}
+\@writefile{toc}{\contentsline {section}{\numberline {4} Conclusion}{5}{section.4}\protected@file@percent }
+\newlabel{sec:conclusion}{{4}{5}{Conclusion}{section.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5} References}{5}{section.5}\protected@file@percent }
+\gdef \@abspage@last{5}

@@ -1,0 +1,3 @@
+% 保留原 TikZ 图备份：如果你想恢复原来的 TikZ 绘制版本，
+% 把 paper.tex 里的 \input{figures/fig_method} 改回 \input{figures/fig_method}
+% 然后把 fig_method.tex 重命名回来即可。

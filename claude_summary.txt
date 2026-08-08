@@ -1,0 +1,243 @@
+---
+  RAWMER 审稿意见修订报告
+
+  0. 当前状态
+
+  编译通过，4 页正文 + 第 5 页纯参考文献（符合 ICASSP 惯例）。无 LaTeX 报错，无未定义引用，剩 1 处 3pt 的 overfull hbox（表格里，不影响渲染）。
+
+  审稿 PDF 里我提取到 44 条去重批注（含 5 条 STRENGTH 标记，无需改动）。下面按"已改 / 需你手动做 / 我拿不准"三类交代。
+  
+  ---
+  1. 已在文中改掉的（39 项）
+
+  1.1 CRITICAL 级
+  
+  ┌──────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                     审稿意见                     │                                                                        处理方式                                                                         │
+  ├──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ patchwork 血统缺失（30 年前原理写成"central      │ Intro 新增一段明确承认：差分编码就是经典 patchwork（Bender 1996、Yeo & Kim 2003），并归入 QIM 谱系；把贡献重新定位为「(i) 搬到 vocoder 前的 mel         │
+  │ observation"）                                   │ 域、(ii) reference-aware 选对」。Conclusion 同步改口                                                                                                    │
+  ├──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ 无自适应攻击/密钥泄露分析                        │ 新增 §2.5 Threat Model：Kerckhoffs 原则、密钥泄露后可按 Eq.(2) 反推 P±  并低功率翻位、密钥+reference 同时泄露可伪造陷害、明确"所有已测攻击都是          │
+  │                                                  │ non-adaptive"                                                                                                                                           │
+  ├──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ 正文 86.1% 与表格 0.859 不符                     │ 根因是消融表混了协议：C=1/4/8 是 random500，C=16 却填了 random2000 的数。已把 C=16 改为 random500 真值 0.995/0.944/0.861，表格标题注明全表              │
+  │                                                  │ random500。正文 86.1% 现在正确                                                                                                                          │
+  ├──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ 威胁模型只有 oblivious 攻击（缺 re-vocoding 等） │ 明确列为未跑的开放攻击（band 定向噪声、re-vocoding），不含糊过去                                                                                        │
+  ├──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ EnCodec 引用 [?] 断链                            │ 你的 refs.bib 里其实已有该条目，PDF 是旧版。已顺带升级为 TMLR 2023 正式出版信息                                                                         │
+  └──────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  
+  1.2 文献与引用
+
+  新增 8 条已核实文献（全部经 DBLP / arXiv / NDSS 官网逐条查证，无编造）：
+  
+  - Bender et al., Techniques for Data Hiding, IBM Syst. J. 35(3/4):313–336, 1996
+  - Yeo & Kim, Modified Patchwork Algorithm, IEEE TSAP 11(4):381–386, 2003
+  - Chen & Wornell, QIM, IEEE TIT 47(4):1423–1443, 2001
+  - Cox et al., Digital Watermarking and Steganography, 2nd ed., Morgan Kaufmann（用于 informed vs blind 检测的论据）
+  - Liu et al., Timbre Watermarking, NDSS 2024
+  - Liu et al., GROOT, ACM MM 2024
+  - Zhou et al., TraceableSpeech, Interspeech 2024
+  - Singh et al., SilentCipher, Interspeech 2024
+
+  引用修正：
+  - san2024 页码 pp. 1–17 → PMLR 235:43180–43196（审稿人说得对）
+  - jin2026 补齐 ACISP 2026, pp. 264–284（DBLP 查到 DOI 10.1007/978-981-92-3018-1_12），"Melshield"→"MelShield"，"ai generated synthesized speech"→"AI-Generated Speech"
+  - yi2023 / chen2023 补 arXiv 编号，kong2020 标题大小写，ljspeech2017 → "The LJ Speech Dataset"
+  
+  Intro 新增 Related work 段：post-hoc（AudioSeal/WavMark/SilentCipher）vs in-generation（Timbre/TraceableSpeech/Groot）的对比定位。
+  
+  1.3 实验严谨性
+  
+  - 96.85% 数字对不上表格：审稿人推断正确——那是 DiffWave 的数，而全文以 HiFi-GAN 为主线。已删掉该悬空数字，改为完整的 baseline validation 段：并列 MelShield 原文发表值（HiFi-GAN 0.782/0.705 @10/5dB，DiffWave
+  0.779/0.701，发表工作点 PESQ≈4.13 / 3.41）与我们的复现值，并说明 DiffWave 上我们的复现在同等 PESQ 下比原文更强（0.823 vs 0.779），因此不是稻草人
+  - MelShield 超参未列：已列全（band 20:60、mask_floor 0.05、energy_gamma 0.75、boundary_margin 0.02、zero headroom、τ=0.61），并声明只调 α
+  - STOI 承诺了却从未出现：补上实测值（HiFi-GAN 双方均 0.969；DiffWave 0.960 vs 0.954），并明确 PESQ/STOI 是对 unmarked vocoder 输出测的
+  - τ=0.61 的 FPR 从未报告：我算了二项尾概率并写入表 1(b) 新增 FPR 列——τ=0.75 → 0.35%，τ=0.61 → 10.8%（31 倍）。审稿人的估算完全正确。正文把 τ=0.61 降格为"bit-margin 诊断，非可部署工作点"
+  - 负控与解析界吻合：实测 0.15–0.40% 对上 0.35% 解析值，已写成"观测到的假阳性就是纯随机预期值"
+  - blind/informed 不可比：表 1 新增 "Ref." 列标注 informed 检测器，正文引 Cox et al. 说明 informed detection 本质更容易，并把波形行明确降格为 context 而非
+  baseline，同时指出"强噪下弃检可能是盲检测器的正确行为，而非缺陷"
+  - 单种子点估计：补三种子（2026–2028）检查，波动 ≤0.002，并明说没做 utterance 级 CI、表内小差距不显著
+  - 优势只存在于高斯噪声：补 EnCodec 跨方法对比（RAWMER ≥0.976 vs 质量匹配 MelShield 0.888/0.942/0.954），说明优势不限于噪声
+  - desync 是攻击配方：改写为独立小节 "Desynchronization is the attack to beat"，明确这是攻击者的理性选择（可脚本化、语音仍可懂），DTW/多尺度对齐是安全需求而非可选 future work；数字进表 2(c)
+  - float32 全 mel 基线矛盾：正文同时给两个分母——22KB 是 float32 全 mel(175KB) 的 1/8，也是更严格的 float32 band-only 基线(87.5KB) 的 1/4
+
+  1.4 表述与体例
+  
+  - 摘要按审稿人给的改写句重写：去掉"boundary-safe/energy-stable/balanced"未定义术语堆叠、去掉 MelShield 前向引用、"matched clean quality"补上 PESQ
+  - 术语统一：encoded quantity 用 relative mel-energy relation，检测统计量用 differential score $z_i$，并**一次性定义 "bin-group pair（两组各 P 个 bin）"**避免误读成两个单 bin
+  - "show the setting is sound and practical" 过度宣称 → 换成具体主张（chance-level 假阳性、≈22KB、25% 片段可验证）
+  - "negative controls" 首次出现加注解；VR 统一用分数（0.0015–0.0040）不再混用百分比
+  - 加粗规则修正：none 列补加粗、平局全部加粗并在标题声明 "ties included"；标题内注明 noiseX / nX = X dB SNR 高斯噪声、定义 τ，使表格自解释
+  - 模糊措辞量化："essentially no loss"→"ACC 至多降 0.0013"；"strictly worse"→"consistently worse"；MelShield 压缩退化补上实测数（0.639/0.577/0.550 vs 0.902/0.713/0.631）
+  - 表格标题语法："on HiFi-GAN [4] RAWMER" → "for RAWMER on HiFi-GAN [4]"
+  - 关键词：Robust Watermarking → additive-noise robustness（去冗余 + 统一句式大小写）
+  - = 号间距全文统一；模板占位注释（XYZ agency 等）清除
+  - 新增 Fig. 1（TikZ 手写，跨栏）：(a) reference band 上的 P±  bin-group pair + C 候选选择、(b) bit 决定能量差符号、(c) 嵌入/验证通路与 $z_i$
+
+  1.5 结构调整（为塞进 4 页）
+
+  原来 4 张表 + 新图放不下，我合并成 2 张跨栏表：
+  - 表 1 = (a) bit accuracy + (b) verification rate
+  - 表 2 = (a) reference compression + (b) candidate count + (c) desynchronization
+
+  并收紧了 float 间距（\textfloatsep 等设为 8pt）。这是唯一的排版妥协，如果你觉得改回默认间距更稳妥，需要再砍约 15 行正文。
+  
+  ---
+  2. 需要你手动改的
+  
+  1. 作者与单位：\address{Author Affiliation(s)} 仍是占位符。我在 \name 上加了一条 \thanks 提醒（投稿前记得连这条 thanks 一起删，匿名投稿更要删）
+  2. 代码发布：我按审稿人建议写了 "code will be released"。如果你不打算开源，必须删掉这句
+  3. 确认 ICASSP 2026 页数规则：我按"4 页正文 + 第 5 页仅参考文献"排版。这是近几届的规则，但我没能在线核实到 2026 的官方页面（搜索没返回有效结果），请你核对 CFP。若要求 4 页含参考文献，则需再压缩约 1 页
+  4. MelShield 的"concurrent work"定性：我按 ACISP 2026 + arXiv 2026-05 写成并列工作。你比我清楚时间线，请确认这个措辞是否合适
+  
+  ---
+  3. 我拿不准 / 需要你判断的
+
+  3.1 一个我无法解释的数据异常 ⚠️ 
+
+  HiFi-GAN 上我们的 MelShield 复现比原文发表值同时更差、质量也更低：
+  
+  ┌────────────────────────────────────────────────┬───────────┬──────────┐
+  │                                                │ 干净 PESQ │ ACC@10dB │
+  ├────────────────────────────────────────────────┼───────────┼──────────┤
+  │ MelShield 原文（HiFi-GAN，α=0.25，band 20:55） │ ≈4.13     │ 0.782    │
+  ├────────────────────────────────────────────────┼───────────┼──────────┤
+  │ 我们复现（α=0.050，band 20:60）                │ 3.51      │ 0.713    │
+  └────────────────────────────────────────────────┴───────────┴──────────┘
+  
+  按常理更低 PESQ = 更强嵌入 = 更抗噪，但这里反了。DiffWave 上则正常（我们 0.823 > 原文 0.779）。
+
+  我在文中的处理是如实披露并归因于"发表工作点处于不同质量区间 + α 标度不可比（他们 α=0.25，我们 α=0.050）"。但这只是我的推测，没有验证。可能的真因还包括：他们的噪声 SNR 定义不同、评测子集不同、band 20:55 vs
+  20:60 的影响。
+
+  这是审稿人最可能追打的一点，建议你确认根因。
+
+  3.2 文献记录里的一处数值不一致
+  
+  paper_experiment_results.md 里"DiffWave 原文 reported"的 noise20 记作 0.9834，但我从 2605.01515v1.pdf 第 15 页直接读到的是 0.9519（该行其他数 0.7788/0.7006 与你的记录完全吻合，只有 noise20 这一格差）。我采用了
+  PDF 原值 0.952。请你复核是笔误还是版本差异。
+  
+  3.3 一个我选择不写进表格的推断
+  
+  审稿人要求补 float32 band-only 行。我查了 eval_relmel_reference_compression_ljspeech.py：band 变体是把 band 外置零，且 align_mels 用的是全 mel 的 frame-energy 曲线。噪声攻击下帧数不变、对齐直接
+  early-return，所以 float32 band-only 的 ACC 应当与 float32 full-mel 逐位相同——但这是我的代码推断，没实测。所以我只在正文写了两个分母的比值，没往表里加未测过的行。跑一次就能坐实（很便宜）。
+
+  3.4 排版妥协
+  
+  为塞进 4 页，我把 float 间距从默认压到 8pt，且删除了 Intro 原来的 itemize 三条式贡献列表（改成连续段落）。如果你偏好原来的列表形式，需要另找约 10 行空间。
+
+  ---
+  4. 还需要补的实验（按优先级）
+  
+  P0 — 审稿人明确要求且直接影响可信度
+  
+  1. ACC-vs-PESQ 曲线（α sweep，两方法各一条） ← 最重要
+  这一条同时解决三个 MAJOR：单工作点不可比、α 标度不可比、以及上面 §3.1 的 HiFi-GAN 异常。现在整个可比性都压在"PESQ 匹配"这一个标量上。文中我已写明这是最有效的补强方式
+  2. re-vocoding 攻击：从水印波形重提 mel、用公开 HiFi-GAN 重合成。这是 mel 域水印最自然的攻击，现在完全空缺，审稿人标为 CRITICAL
+  3. band 定向噪声（把噪声集中在 20:60）：keyless 但知道方案的攻击者的显然选择
+  4. utterance 级 bootstrap 95% CI（至少 noise10/noise5 两列）：results.csv 还在的话很便宜
+
+  P1 — 显著加强论文
+
+  5. 主观听测（MUSHRA 或 CMOS，15–20 人 × 20 clip）：PESQ 3.51 vs 4.0–4.5 是可听差距。目前"质量匹配"只在两个 mel 域方法之间成立，波形基线根本没花这份感知预算。我已用 STOI 补强了客观面，但主观测试无法替代
+  6. 反向消融：absolute-residual 编码 + reliability-aware 选择。这是唯一能把两个机制彻底分开的实验。现在差分编码的独立价值只靠 C=1 一个点支撑（66.8% vs MelShield 63.3%，差距很小）。我已在文中如实说明未做
+  7. 波形基线对齐协议：AudioSeal/WavMark 现在是 500 条 / 16 bit，mel 域是 2000 条 / 32 bit。改成同一 2000 条集合，并考虑 payload-normalized 指标
+  8. float32 band-only 压缩行（见 §3.3，很便宜）
+  
+  P2 — 拓宽适用性
+  
+  9. 端到端 TTS（用声学模型产出的 mel，而非 ground-truth mel）——重建统计不同
+  10. 多说话人语料（VCTK / LibriTTS）
+  11. 重录信道 / RIR（扬声器→麦克风，真实洗白链路的标准环节）
+  12. regeneration/removal 攻击：去噪、diffusion purification、neural codec 再生
+  13. 对齐感知的 RAWMER 变体（DTW / 多尺度）——文中已把它定性为安全需求，做出来就是下一篇的核心
+  
+  ---
+  5. 建议查阅的文献
+  
+  已加入的 8 条已覆盖审稿人点名的全部（patchwork、QIM、Timbre、Groot、TraceableSpeech、SilentCipher、Cox）。若要进一步补强，两个方向值得看：
+
+  - 同步鲁棒水印：既然 desync 是你唯一的真实弱点，值得查 audio watermarking 里的 synchronization/exhaustive-search 与 DTW 对齐文献，为 future work提供可引的技术路径
+  ---
+  4. 还需要补的实验（按优先级）
+  3.1 一个我无法解释的数据异常 ⚠️ 
+
+  HiFi-GAN 上我们的 MelShield 复现比原文发表值同时更差、质量也更低：
+
+  ┌────────────────────────────────────────────────┬───────────┬──────────┐
+  │                                                │ 干净 PESQ │ ACC@10dB │
+  ├────────────────────────────────────────────────┼───────────┼──────────┤
+  │ MelShield 原文（HiFi-GAN，α=0.25，band 20:55） │ ≈4.13     │ 0.782    │
+  ├────────────────────────────────────────────────┼───────────┼──────────┤
+  │ 我们复现（α=0.050，band 20:60）                │ 3.51      │ 0.713    │
+  └────────────────────────────────────────────────┴───────────┴──────────┘
+
+  按常理更低 PESQ = 更强嵌入 = 更抗噪，但这里反了。DiffWave 上则正常（我们 0.823 > 原文 0.779）。
+
+  我在文中的处理是如实披露并归因于"发表工作点处于不同质量区间 + α 标度不可比（他们 α=0.25，我们
+  α=0.050）"。但这只是我的推测，没有验证。可能的真因还包括：他们的噪声 SNR 定义不同、评测子集不同、band 20:55 vs 20:60 的影响。
+
+  这是审稿人最可能追打的一点，建议你确认根因。
+
+  3.2 文献记录里的一处数值不一致
+
+  paper_experiment_results.md 里"DiffWave 原文 reported"的 noise20 记作 0.9834，但我从 2605.01515v1.pdf 第 15 页直接读到的是 0.9519（该行其他数
+  0.7788/0.7006 与你的记录完全吻合，只有 noise20 这一格差）。我采用了 PDF 原值 0.952。请你复核是笔误还是版本差异。
+
+  3.3 一个我选择不写进表格的推断
+
+  审稿人要求补 float32 band-only 行。我查了 eval_relmel_reference_compression_ljspeech.py：band 变体是把 band 外置零，且 align_mels 用的是全 mel 的
+  frame-energy 曲线。噪声攻击下帧数不变、对齐直接 early-return，所以 float32 band-only 的 ACC 应当与 float32 full-mel
+  逐位相同——但这是我的代码推断，没实测。所以我只在正文写了两个分母的比值，没往表里加未测过的行。跑一次就能坐实（很便宜）。
+
+  3.4 排版妥协
+
+  为塞进 4 页，我把 float 间距从默认压到 8pt，且删除了 Intro 原来的 itemize 三条式贡献列表（改成连续段落）。如果你偏好原来的列表形式，需要另找约 10
+  行空间。
+
+  ---
+  4. 还需要补的实验（按优先级）
+
+  P0 — 审稿人明确要求且直接影响可信度
+
+  1. ACC-vs-PESQ 曲线（α sweep，两方法各一条） ← 最重要
+  ---
+  4. 还需要补的实验（按优先级）
+
+  P0 — 审稿人明确要求且直接影响可信度
+
+  1. ACC-vs-PESQ 曲线（α sweep，两方法各一条） ← 最重要
+  这一条同时解决三个 MAJOR：单工作点不可比、α 标度不可比、以及上面 §3.1 的 HiFi-GAN 异常。现在整个可比性都压在"PESQ 匹配"这一个标量上。文中我已写明这是最有效的补强方式
+  2. re-vocoding 攻击：从水印波形重提 mel、用公开 HiFi-GAN 重合成。这是 mel 域水印最自然的攻击，现在完全空缺，审稿人标为 CRITICAL
+  3. band 定向噪声（把噪声集中在 20:60）：keyless 但知道方案的攻击者的显然选择
+  4. utterance 级 bootstrap 95% CI（至少 noise10/noise5 两列）：results.csv 还在的话很便宜
+
+  P1 — 显著加强论文
+
+  5. 主观听测（MUSHRA 或 CMOS，15–20 人 × 20 clip）：PESQ 3.51 vs 4.0–4.5 是可听差距。目前"质量匹配"只在两个 mel 域方法之间成立，波形基线根本没花这份感知预算。我已用 STOI 补强了客观面，但主观测试无法替代
+  6. 反向消融：absolute-residual 编码 + reliability-aware 选择。这是唯一能把两个机制彻底分开的实验。现在差分编码的独立价值只靠 C=1 一个点支撑（66.8% vs MelShield 63.3%，差距很小）。我已在文中如实说明未做
+  7. 波形基线对齐协议：AudioSeal/WavMark 现在是 500 条 / 16 bit，mel 域是 2000 条 / 32 bit。改成同一 2000 条集合，并考虑 payload-normalized 指标
+  8. float32 band-only 压缩行（见 §3.3，很便宜）
+
+  P2 — 拓宽适用性
+
+  9. 端到端 TTS（用声学模型产出的 mel，而非 ground-truth mel）——重建统计不同
+  10. 多说话人语料（VCTK / LibriTTS）
+  11. 重录信道 / RIR（扬声器→麦克风，真实洗白链路的标准环节）
+  12. regeneration/removal 攻击：去噪、diffusion purification、neural codec 再生
+  13. 对齐感知的 RAWMER 变体（DTW / 多尺度）——文中已把它定性为安全需求，做出来就是下一篇的核心
+
+  ---
+  5. 建议查阅的文献
+
+  已加入的 8 条已覆盖审稿人点名的全部（patchwork、QIM、Timbre、Groot、TraceableSpeech、SilentCipher、Cox）。若要进一步补强，两个方向值得看：
+
+  - 同步鲁棒水印：既然 desync 是你唯一的真实弱点，值得查 audio watermarking 里的 synchronization/exhaustive-search 与 DTW 对齐文献，为 future work 提供可引的技术路径
+  - AudioSeal 之后的定位水印 / latent 域水印（如 Latent Watermarking of Audio Generative Models, arXiv:2409.02915，我搜索时看到但未核实细节）——可用于强化 in-generation 谱系的完整性
+
+  ---
+  改动文件：sections/*.tex（全部 5 个）、tables/tab_1_main.tex、tables/tab_3_compression.tex（合并后）、figures/fig_method.tex（新建）、refs.bib（重写）、paper.tex。删除了
+  tab_2_vr.tex、tab_4_ablation.tex、tab_5_desync.tex（内容已并入前两表）。

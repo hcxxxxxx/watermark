@@ -583,10 +583,13 @@ random2000，无攻击扩展：
 - `noise0`：0 dB 极强加性噪声。
 - `speed090/speed110`：0.9/1.1 倍速。
 - `pitch_up/pitch_down`：约 ±100 cents，也就是约 1 个半音。
+- `encodec6/encodec12/encodec24`：EnCodec neural codec（神经音频编解码器）约 6/12/24 kbps 重编码。
 
 结果说明：
 
 - RAWMER 对低码率压缩、滤波、重采样、裁剪、量化、混响总体很稳。
+- RAWMER 对 EnCodec neural codec 攻击也很稳。random500 下，HiFi-GAN 的 `encodec6/12/24` ACC 为 0.9761/0.9901/0.9951，DiffWave 为 0.9768/0.9889/0.9920，验证率最低也有 0.998。
+- 同协议下 MelShield 的 EnCodec ACC 更低：HiFi-GAN 为 0.8876/0.9417/0.9541，DiffWave 为 0.9431/0.9689/0.9761。因此 neural codec 攻击可以作为 RAWMER 相对 MelShield 的补充优势证据。
 - 0 dB 噪声是加性噪声鲁棒性的边界，HiFi-GAN 下 ACC 约 0.7516，VR 0.598；DiffWave 下 ACC 约 0.7294，VR 0.486。
 - 强 speed change 和 pitch shift 是当前方法的主要弱点。
 
@@ -738,7 +741,8 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 4. Reference false positive random2000 表。
 5. Reference compression 表，突出 21.87KB band_uint8。
 6. Blind fragment verification 表。
-7. Speed/pitch 边界小表或图。
+7. EnCodec neural codec 攻击表。
+8. Speed/pitch 边界小表或图。
 
 补充材料可以放：
 
@@ -747,6 +751,7 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 - DiffWave 调参过程。
 - 已知位置片段验证。
 - modern attacks 详细表。
+- neural codec 详细表。
 - AudioSeal/WavMark 完整攻击表。
 
 ## 25. 如果要继续完善实验
@@ -754,7 +759,7 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 后续最有价值的方向：
 
 1. 尝试 AudioMarkBench 或 RAW-Bench 兼容攻击协议，增强 benchmark 认可度。
-2. 加入 neural codec 攻击，如 EnCodec、DAC、SoundStream。
+2. EnCodec 攻击已经补完；如时间允许，可继续补 DAC 或 SoundStream 作为另一种 neural codec。
 3. 在 LibriSpeech 或 Common Voice 上补一个跨数据集验证。
 4. 为 speed/pitch 引入更强 alignment，再验证是否能修复同步破坏。
 5. 如版面允许，可把 reference 压缩和 blind fragment verification 也扩到 random2000 作为补充材料。
@@ -775,6 +780,6 @@ Short-Time Objective Intelligibility，客观可懂度指标。值越高通常�
 
 ## 27. 最短版本
 
-如果只允许用一段话介绍本工作，可以写：
+如果只允许用一段话介绍本工作：
 
 > RAWMER is a reference-assisted mel-domain watermarking method for neural speech provenance verification. Instead of encoding payload bits as absolute perturbation patterns, it embeds them as relative energy relations between reliable positive and negative mel-bin groups across repeated time blocks. With a clean mel reference retained by the service provider, RAWMER verifies whether a suspect audio clip matches a claimed payload, key, and generation record. Experiments on LJSpeech with HiFi-GAN and DiffWave show that RAWMER substantially improves additive-noise robustness over quality-matched MelShield, remains competitive under common signal-processing attacks, produces low false positives under wrong-key/payload/reference controls, supports compressed references of about 21.87KB per utterance, and can verify partial clips via blind reference search. Its current main limitation is strong time/frequency synchronization distortion such as large speed changes and pitch shifts.
